@@ -14,7 +14,7 @@ import {
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import SignOutButton from "./sign-out-btn";
 import { useSession } from "@/lib/auth/auth-client";
-import { ThemeToggle } from "./theme-toggle";
+import { FolderKanban } from 'lucide-react';
 
 
 export default function Navbar() {
@@ -27,8 +27,8 @@ export default function Navbar() {
                     href="/"
                     className="flex items-center gap-2 text-xl font-semibold text-primary"
                 >
-                    <Brackets />
-                    Jobbed
+                    <FolderKanban />
+                    Stride
                 </Link>
                 <div className="flex items-center gap-4">
                     {session?.user ? (
@@ -41,7 +41,6 @@ export default function Navbar() {
                                     Dashboard
                                 </Button>
                             </Link>
-                            <ThemeToggle />
                             <DropdownMenu>
                                 <DropdownMenuTrigger>
                                     <Button
