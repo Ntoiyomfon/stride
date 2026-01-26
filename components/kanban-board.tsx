@@ -95,14 +95,14 @@ function DroppableColumn({
   const sortedJobs =
     column.jobApplications?.sort((a, b) => a.order - b.order) || [];
   return (
-    <Card className="min-w-[300px] flex-shrink-0 shadow-md p-0">
+    <Card className="min-w-[280px] md:min-w-[300px] flex-shrink-0 shadow-md p-0">
       <CardHeader
-        className={`${config.color} text-white rounded-t-lg pb-3 pt-3`}
+        className={`${config.color} text-white rounded-t-lg pb-2 md:pb-3 pt-2 md:pt-3`}
       >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2">
             {config.icon}
-            <CardTitle className="text-white text-base font-semibold">
+            <CardTitle className="text-white text-sm md:text-base font-semibold">
               {column.name}
             </CardTitle>
           </div>
@@ -128,7 +128,7 @@ function DroppableColumn({
 
       <CardContent
         ref={setNodeRef}
-        className={`space-y-2 pt-4 bg-gray-50/50 min-h-[400px] rounded-b-lg ${
+        className={`space-y-2 pt-2 md:pt-4 bg-gray-50/50 min-h-[400px] md:min-h-[400px] rounded-b-lg ${
           isOver ? "ring-2 ring-blue-500" : ""
         }`}
       >

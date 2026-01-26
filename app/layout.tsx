@@ -1,22 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Onest } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/navbar";
-import { ThemeProvider } from "@/components/theme-provider";
 import PageTransition from "@/components/page-transition";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const onest = Onest({
+  variable: "--font-onest",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Jobbed",
+  title: "Stride",
   description: "Job tracking application for job hunters",
 };
 
@@ -28,12 +22,11 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}
+        className={`${onest.variable} font-sans antialiased`}
       >
-        <ThemeProvider defaultTheme="light" storageKey="job-tracker-theme">
           <Navbar />
           <PageTransition>{children}</PageTransition>
-        </ThemeProvider>
+
       </body>
     </html>
   );
