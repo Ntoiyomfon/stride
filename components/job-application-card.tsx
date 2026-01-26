@@ -96,24 +96,24 @@ export default function JobApplicationCard({
         className="cursor-pointer transition-shadow hover:shadow-lg bg-white group shadow-sm"
         {...dragHandleProps}
       >
-        <CardContent className="p-3">
-          <div className="flex items-start justify-between gap-1 md:gap-2">
+        <CardContent className="p-2.5">
+          <div className="flex items-start justify-between gap-1.5">
             <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-xs md:text-sm mb-1">{job.position}</h3>
-              <p className="text-xs text-muted-foreground mb-1 md:mb-2">
+              <h3 className="font-semibold text-xs md:text-sm mb-0.5">{job.position}</h3>
+              <p className="text-[10px] md:text-xs text-muted-foreground mb-1 md:mb-1.5">
                 {job.company}
               </p>
               {job.description && (
-                <p className="text-xs text-muted-foreground mb-1 md:mb-2 line-clamp-2">
+                <p className="text-[10px] md:text-xs text-muted-foreground mb-1 md:mb-1.5 line-clamp-2">
                   {job.description}
                 </p>
               )}
               {job.tags && job.tags.length > 0 && (
-                <div className="flex flex-wrap gap-0.5 md:gap-1 mb-1 md:mb-2">
+                <div className="flex flex-wrap gap-0.5 md:gap-1 mb-1 md:mb-1.5">
                   {job.tags.map((tag, index) => (
                     <span
                       key={index}
-                      className="px-1.5 md:px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
+                      className="px-1.5 py-0.5 text-[10px] md:text-xs rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300"
                     >
                       {tag}
                     </span>
@@ -124,18 +124,18 @@ export default function JobApplicationCard({
                 <a
                   href={job.jobUrl}
                   target="_blank"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-1"
+                  className="inline-flex items-center gap-1 text-[10px] md:text-xs text-primary hover:underline mt-0.5"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <ExternalLink className="h-3 w-3" />
+                  <ExternalLink className="h-2.5 w-2.5 md:h-3 md:w-3" />
                 </a>
               )}
             </div>
-            <div className="flex items-start gap-0.5 md:gap-1">
+            <div className="flex items-start gap-0.5">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-5 md:h-6 w-5 md:w-6">
-                    <MoreVertical className="h-3 md:h-4 w-3 md:w-4" />
+                  <Button variant="ghost" size="icon" className="h-5 w-5 md:h-6 md:w-6">
+                    <MoreVertical className="h-3 w-3 md:h-4 md:w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
