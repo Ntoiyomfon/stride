@@ -15,7 +15,7 @@ import { Avatar, AvatarFallback } from "./ui/avatar";
 import SignOutButton from "./sign-out-btn";
 import { useSession } from "@/lib/auth/auth-client";
 import { FolderKanban } from 'lucide-react';
-
+import SettingsPageBtn from "./settings-page-btn";
 
 export default function Navbar() {
     const { data: session } = useSession();
@@ -66,6 +66,7 @@ export default function Navbar() {
                                             </p>
                                         </div>
                                     </DropdownMenuLabel>
+                                    <SettingsPageBtn />
                                     <SignOutButton />
                                 </DropdownMenuContent>
                             </DropdownMenu>

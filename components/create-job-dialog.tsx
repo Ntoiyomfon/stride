@@ -76,7 +76,7 @@ export default function CreateJobApplicationDialog({
           Add Job
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[95vw] md:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg md:text-xl">Add Job Application</DialogTitle>
           <DialogDescription className="text-xs md:text-sm">Track a new job application</DialogDescription>
