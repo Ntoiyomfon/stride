@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Onest } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/navbar";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
+import LayoutWrapper from "@/components/layout-wrapper";
 
 const onest = Onest({
   variable: "--font-onest",
@@ -45,8 +45,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Navbar />
-          {children}
+          <LayoutWrapper>
+            {children}
+          </LayoutWrapper>
           <Toaster />
         </ThemeProvider>
       </body>

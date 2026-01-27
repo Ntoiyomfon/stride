@@ -11,15 +11,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { signUp } from "@/lib/auth/auth-client";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn, signUp } from "@/lib/auth/auth-client";
 import { OAuthButtons } from "@/components/oauth-buttons";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
-export default function SignIn() {
+export default function SignUp() {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -36,13 +37,14 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      const result = await signIn.email({
+      const result = await signUp.email({
+        name,
         email,
         password,
       });
 
       if (result.error) {
-        setError(result.error.message ?? "Failed to sign in");
+        setError(result.error.message ?? "Failed to sign up");
       } else {
         router.push("/dashboard");
       }
@@ -54,7 +56,7 @@ export default function SignIn() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -64,13 +66,13 @@ export default function SignIn() {
           delay: 0.1
         }}
       >
-        <Card className="w-full max-w-md shadow-lg">
+        <Card className="w-full md:w-[538px] shadow-lg">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold text-foreground">
-              Sign In
+              Sign Up
             </CardTitle>
             <CardDescription>
-              Enter your credentials to access your account
+              Create an account to start tracking your job applications
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -84,7 +86,7 @@ export default function SignIn() {
               </motion.div>
             )}
             
-            <OAuthButtons mode="signin" />
+            <OAuthButtons mode="signup" />
             
             <form onSubmit={handleSubmit} className="space-y-4">
               <motion.div
@@ -93,15 +95,15 @@ export default function SignIn() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
               >
-                <Label htmlFor="email">
-                  Email
+                <Label htmlFor="name">
+                  Name
                 </Label>
                   <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
+                    id="name"
+                    type="text"
+                    placeholder="John Doe"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
                     required
                   />
               </motion.div>
@@ -111,6 +113,24 @@ export default function SignIn() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
               >
+                <Label htmlFor="email">
+                  Email
+                </Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+              </motion.div>
+              <motion.div
+                className="space-y-2"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+              >
                 <Label htmlFor="password">
                   Password
                 </Label>
@@ -118,9 +138,9 @@ export default function SignIn() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    required
                     minLength={8}
                     className="pr-10"
                   />
@@ -164,18 +184,18 @@ export default function SignIn() {
                 className="w-full bg-primary hover:bg-primary/90"
                 disabled={loading}
               >
-                {loading ? "Signing in..." : "Sign In"}
+                {loading ? "Creating account..." : "Sign Up"}
               </Button>
             </form>
           </CardContent>
           <CardFooter>
             <p className="text-center text-sm text-muted-foreground w-full">
-              Don't have an account?{" "}
+              Already have an account?{" "}
               <Link
-                href="/sign-up"
+                href="/sign-in"
                 className="font-medium text-primary hover:underline"
               >
-                Sign up
+                Sign in
               </Link>
             </p>
           </CardFooter>

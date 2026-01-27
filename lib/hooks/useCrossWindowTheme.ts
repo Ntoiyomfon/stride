@@ -93,23 +93,26 @@ export function useCrossWindowTheme(user: User | null) {
         detail: { theme: newTheme, source: 'current-window' }
       }));
 
-      // 5. Save to database in background
-      const result = await updatePreferences({ theme: newTheme });
-      
-      if (result.success) {
-        // Trigger user preferences refresh across all components
-        window.dispatchEvent(new CustomEvent('preferences-updated'));
-      } else {
-        console.error('Failed to save theme preference:', result.error);
-        // Don't revert theme on database error - keep the UI change
+      // 5. Save to database in background (only if user is logged in)
+      if (user) {
+        const result = await updatePreferences({ theme: newTheme });
+        
+        if (result.success) {
+          // Trigger user preferences refresh across all components
+          window.dispatchEvent(new CustomEvent('preferences-updated'));
+        } else {
+          console.error('Failed to save theme preference:', result.error);
+          // Don't revert theme on database error - keep the UI change
+        }
       }
+      // If user is not logged in, theme is only saved to localStorage (which is fine)
 
     } catch (error) {
       console.error('Theme change error:', error);
     } finally {
       setIsUpdating(false);
     }
-  }, [theme, setTheme, isUpdating]);
+  }, [theme, setTheme, isUpdating, user]);
 
   // Listen for BroadcastChannel messages
   useEffect(() => {

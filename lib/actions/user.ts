@@ -119,8 +119,17 @@ export async function deleteAccount() {
     const mongooseInstance = await connectDB();
     const db = mongooseInstance.connection.db;
 
+    if (!db) {
+        console.error("Database connection not available");
+        return { error: "Database connection failed" };
+    }
+
     try {
-        console.log(`Starting account deletion for user: ${session.user.id}`);
+        console.log(`Starting comprehensive account deletion for user: ${session.user.id}`);
+
+        // Get user email first for verification cleanup
+        const user = await User.findById(session.user.id).select("email");
+        const userEmail = user?.email;
 
         // 1. Delete all Job Applications owned by user
         const jobAppResult = await JobApplication.deleteMany({ userId: session.user.id });
@@ -142,25 +151,73 @@ export async function deleteAccount() {
         const sessionResult = await Session.deleteMany({ userId: session.user.id });
         console.log(`Deleted ${sessionResult.deletedCount} session tracking records`);
 
-        // 4. Delete Better Auth internal collections (with error handling)
-        if (db) {
-            try {
-                const betterAuthSessions = await db.collection("session").deleteMany({ userId: session.user.id });
-                console.log(`Deleted ${betterAuthSessions.deletedCount} Better Auth sessions`);
-                
-                const betterAuthAccounts = await db.collection("account").deleteMany({ userId: session.user.id });
-                console.log(`Deleted ${betterAuthAccounts.deletedCount} Better Auth accounts`);
-            } catch (dbError) {
-                console.error("Error deleting Better Auth collections:", dbError);
-                // Continue with deletion even if this fails
+        // 4. Delete ALL Better Auth related collections (comprehensive cleanup)
+        try {
+            // Better Auth sessions
+            const betterAuthSessions = await db.collection("session").deleteMany({ userId: session.user.id });
+            console.log(`Deleted ${betterAuthSessions.deletedCount} Better Auth sessions`);
+            
+            // Better Auth accounts (OAuth connections like Google, GitHub) - check both singular and plural
+            const betterAuthAccounts1 = await db.collection("account").deleteMany({ userId: session.user.id });
+            console.log(`Deleted ${betterAuthAccounts1.deletedCount} Better Auth accounts (singular collection)`);
+            
+            const betterAuthAccounts2 = await db.collection("accounts").deleteMany({ userId: session.user.id });
+            console.log(`Deleted ${betterAuthAccounts2.deletedCount} Better Auth accounts (plural collection)`);
+            
+            // Better Auth verification records - these don't always have userId, need multiple approaches
+            if (userEmail) {
+                // Try to delete verification records that might be linked to this user's email
+                const verificationResult1 = await db.collection("verification").deleteMany({ 
+                    $or: [
+                        { userId: session.user.id },
+                        { identifier: { $regex: userEmail, $options: 'i' } },
+                        { value: { $regex: userEmail, $options: 'i' } }
+                    ]
+                });
+                console.log(`Deleted ${verificationResult1.deletedCount} verification records (by email/userId)`);
             }
+            
+            // Also try to delete verification records by userId only
+            const verificationResult2 = await db.collection("verification").deleteMany({ userId: session.user.id });
+            console.log(`Deleted ${verificationResult2.deletedCount} verification records (by userId only)`);
+            
+            // Better Auth two-factor authentication records
+            const twoFactorResult = await db.collection("twoFactor").deleteMany({ userId: session.user.id });
+            console.log(`Deleted ${twoFactorResult.deletedCount} two-factor authentication records`);
+            
+            // Better Auth backup codes
+            const backupCodesResult = await db.collection("backupCode").deleteMany({ userId: session.user.id });
+            console.log(`Deleted ${backupCodesResult.deletedCount} backup codes`);
+            
+            // Better Auth passkey records (if using passkeys)
+            const passkeyResult = await db.collection("passkey").deleteMany({ userId: session.user.id });
+            console.log(`Deleted ${passkeyResult.deletedCount} passkey records`);
+            
+            // Better Auth trusted device records
+            const trustedDeviceResult = await db.collection("trustedDevice").deleteMany({ userId: session.user.id });
+            console.log(`Deleted ${trustedDeviceResult.deletedCount} trusted device records`);
+            
+            // Better Auth rate limit records (cleanup user-specific rate limits)
+            if (userEmail) {
+                const rateLimitResult = await db.collection("rateLimit").deleteMany({ 
+                    $or: [
+                        { userId: session.user.id },
+                        { identifier: userEmail }
+                    ]
+                });
+                console.log(`Deleted ${rateLimitResult.deletedCount} rate limit records`);
+            }
+            
+        } catch (dbError) {
+            console.error("Error deleting Better Auth collections:", dbError);
+            // Continue with deletion even if some collections fail
         }
 
         // 5. Delete User record (this should be last)
         const userResult = await User.findByIdAndDelete(session.user.id);
         console.log(`Deleted user record: ${userResult ? 'success' : 'failed'}`);
 
-        console.log(`Account deletion completed for user: ${session.user.id}`);
+        console.log(`Comprehensive account deletion completed for user: ${session.user.id}`);
         return { success: true };
     } catch (error) {
         console.error("Failed to delete account:", error);
