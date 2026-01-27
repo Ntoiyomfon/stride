@@ -73,7 +73,10 @@ export default function HomePage() {
               playsInline
               controls
             >
-              <source src="/productvideo.mp4" type="video/mp4" />
+              {/* Replace with your video hosting URL */}
+              <source src="https://your-video-host.com/stride-product-vid.mp4" type="video/mp4" />
+              {/* Fallback for local development */}
+              <source src="/stride-product-vid.mp4" type="video/mp4" />
               Your browser does not support the video tag.
             </video>
           </div>
