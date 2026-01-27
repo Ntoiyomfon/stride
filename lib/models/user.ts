@@ -8,6 +8,13 @@ export interface IUser extends Document {
     createdAt: Date;
     updatedAt: Date;
     profilePictureData?: string; // Stores Base64 string
+    profilePictureUpdatedAt?: Date; // Track when profile picture was last updated
+    // OAuth providers array
+    authProviders?: Array<{
+        provider: 'google' | 'github' | 'email';
+        providerUserId: string;
+        connectedAt: Date;
+    }>;
     preferences?: {
         emailNotifications?: boolean;
         weeklySummary?: boolean;
@@ -44,6 +51,25 @@ const UserSchema = new Schema<IUser>(
         profilePictureData: {
             type: String, // Large Base64
         },
+        profilePictureUpdatedAt: {
+            type: Date, // Track when profile picture was last updated
+        },
+        // OAuth providers array
+        authProviders: [{
+            provider: {
+                type: String,
+                enum: ['google', 'github', 'email'],
+                required: true
+            },
+            providerUserId: {
+                type: String,
+                required: true
+            },
+            connectedAt: {
+                type: Date,
+                default: Date.now
+            }
+        }],
         preferences: {
             emailNotifications: { type: Boolean, default: true },
             weeklySummary: { type: Boolean, default: false },

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/auth";
-import connectDB from "@/lib/db";
+import { getUserSessions, cleanupExpiredSessions } from "@/lib/actions/session-management";
 
 export async function GET(request: NextRequest) {
     try {
@@ -10,33 +10,36 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        await connectDB();
-        
-        const mongoose = await import("mongoose");
-        const db = mongoose.connection.db;
-        
-        if (!db) {
-            return NextResponse.json({ error: "Database not available" }, { status: 500 });
-        }
-        
-        // Check sessions collection
-        const sessionsCollection = db.collection('session');
-        const userSessions = await sessionsCollection.find({
-            userId: session.user.id
-        }).toArray();
-        
-        // Also check all collections to see what Better Auth is using
-        const collections = await db.listCollections().toArray();
-        const collectionNames = collections.map(c => c.name);
+        const result = await getUserSessions();
         
         return NextResponse.json({
-            currentUser: session.user.id,
-            userSessions: userSessions,
-            allCollections: collectionNames,
-            sessionCount: userSessions.length
+            currentSession: session.session?.id,
+            userId: session.user.id,
+            sessions: result.sessions || [],
+            error: result.error
         });
     } catch (error) {
         console.error("Debug sessions error:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+}
+
+export async function DELETE(request: NextRequest) {
+    try {
+        const session = await getSession();
+        
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const result = await cleanupExpiredSessions();
+        
+        return NextResponse.json({
+            success: result.success,
+            error: result.error
+        });
+    } catch (error) {
+        console.error("Cleanup sessions error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

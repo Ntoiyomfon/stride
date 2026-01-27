@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth/auth";
 import { auth } from "@/lib/auth/auth";
+import { revokeAllOtherSessions } from "@/lib/actions/session-management";
 import connectDB from "@/lib/db";
 
 export async function POST(request: NextRequest) {
@@ -15,7 +16,19 @@ export async function POST(request: NextRequest) {
 
         await connectDB();
         
-        // Direct database cleanup - remove all sessions for this user
+        // Revoke sessions in our tracking system
+        try {
+            const result = await revokeAllOtherSessions();
+            if (result.success) {
+                console.log("Successfully revoked sessions in tracking system");
+            } else {
+                console.error("Failed to revoke sessions in tracking system:", result.error);
+            }
+        } catch (trackingError) {
+            console.error("Session tracking revocation failed:", trackingError);
+        }
+        
+        // Direct database cleanup - remove all sessions for this user from Better Auth
         const mongoose = await import("mongoose");
         const db = mongoose.connection.db;
         
@@ -25,7 +38,7 @@ export async function POST(request: NextRequest) {
                 const deleteResult = await sessionsCollection.deleteMany({
                     userId: session.user.id
                 });
-                console.log(`Deleted ${deleteResult.deletedCount} sessions from database`);
+                console.log(`Deleted ${deleteResult.deletedCount} sessions from Better Auth database`);
             } catch (dbError) {
                 console.error("Database session cleanup failed:", dbError);
             }
@@ -36,9 +49,9 @@ export async function POST(request: NextRequest) {
             await auth.api.revokeOtherSessions({
                 headers: request.headers
             });
-            console.log("Successfully revoked other sessions via API");
+            console.log("Successfully revoked other sessions via Better Auth API");
         } catch (error) {
-            console.error("Failed to revoke other sessions via API:", error);
+            console.error("Failed to revoke other sessions via Better Auth API:", error);
         }
 
         try {

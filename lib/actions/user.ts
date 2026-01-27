@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth/auth";
 import connectDB from "@/lib/db";
 import User from "@/lib/models/user";
 import { Board, Column, JobApplication } from "@/lib/models/index";
+import Session from "@/lib/models/session";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth/auth";
@@ -53,14 +54,17 @@ export async function updateProfilePicture(base64: string) {
     await connectDB();
 
     try {
-        const imageUrl = `/api/avatar/${session.user.id}`;
+        // Add timestamp for cache busting
+        const timestamp = Date.now();
+        const imageUrl = `/api/avatar/${session.user.id}?t=${timestamp}`;
 
         await User.findByIdAndUpdate(
             session.user.id,
             {
                 $set: {
                     profilePictureData: base64,
-                    image: imageUrl
+                    image: imageUrl,
+                    profilePictureUpdatedAt: new Date()
                 }
             },
             { new: true }
@@ -91,13 +95,16 @@ export async function updatePreferences(data: UpdatePreferencesData) {
         if (data.theme !== undefined) update["preferences.theme"] = data.theme;
         if (data.accentColor !== undefined) update["preferences.accentColor"] = data.accentColor;
 
-        await User.findByIdAndUpdate(
+        const updatedUser = await User.findByIdAndUpdate(
             session.user.id,
             { $set: update },
-            { new: true }
-        );
+            { new: true, lean: true } // Use lean() to get plain object
+        ).select("-password");
 
         revalidatePath("/settings");
+        
+        // Return success without user data to avoid serialization issues
+        // Client components will refetch user data through useUserPreferences hook
         return { success: true };
     } catch (error) {
         console.error("Failed to update preferences:", error);
@@ -113,28 +120,47 @@ export async function deleteAccount() {
     const db = mongooseInstance.connection.db;
 
     try {
-        // Cascade Delete
-        // 1. Delete all Job Applications owned by user
-        await JobApplication.deleteMany({ userId: session.user.id });
+        console.log(`Starting account deletion for user: ${session.user.id}`);
 
-        // 2. Delete all Boards owned by user
+        // 1. Delete all Job Applications owned by user
+        const jobAppResult = await JobApplication.deleteMany({ userId: session.user.id });
+        console.log(`Deleted ${jobAppResult.deletedCount} job applications`);
+
+        // 2. Delete all Boards and their Columns owned by user
         const userBoards = await Board.find({ userId: session.user.id }).select("_id");
         const boardIds = userBoards.map(b => b._id);
 
-        await Column.deleteMany({ boardId: { $in: boardIds } });
-
-        // 3. Delete Boards
-        await Board.deleteMany({ userId: session.user.id });
-
-        // 4. Delete Better Auth internal collections
-        if (db) {
-            await db.collection("session").deleteMany({ userId: session.user.id });
-            await db.collection("account").deleteMany({ userId: session.user.id });
+        if (boardIds.length > 0) {
+            const columnResult = await Column.deleteMany({ boardId: { $in: boardIds } });
+            console.log(`Deleted ${columnResult.deletedCount} columns`);
         }
 
-        // 5. Delete User
-        await User.findByIdAndDelete(session.user.id);
+        const boardResult = await Board.deleteMany({ userId: session.user.id });
+        console.log(`Deleted ${boardResult.deletedCount} boards`);
 
+        // 3. Delete our custom session tracking records
+        const sessionResult = await Session.deleteMany({ userId: session.user.id });
+        console.log(`Deleted ${sessionResult.deletedCount} session tracking records`);
+
+        // 4. Delete Better Auth internal collections (with error handling)
+        if (db) {
+            try {
+                const betterAuthSessions = await db.collection("session").deleteMany({ userId: session.user.id });
+                console.log(`Deleted ${betterAuthSessions.deletedCount} Better Auth sessions`);
+                
+                const betterAuthAccounts = await db.collection("account").deleteMany({ userId: session.user.id });
+                console.log(`Deleted ${betterAuthAccounts.deletedCount} Better Auth accounts`);
+            } catch (dbError) {
+                console.error("Error deleting Better Auth collections:", dbError);
+                // Continue with deletion even if this fails
+            }
+        }
+
+        // 5. Delete User record (this should be last)
+        const userResult = await User.findByIdAndDelete(session.user.id);
+        console.log(`Deleted user record: ${userResult ? 'success' : 'failed'}`);
+
+        console.log(`Account deletion completed for user: ${session.user.id}`);
         return { success: true };
     } catch (error) {
         console.error("Failed to delete account:", error);

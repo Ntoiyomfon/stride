@@ -10,7 +10,7 @@ export async function GET(
         const { userId } = await params;
         await connectDB();
 
-        const user = await User.findById(userId).select("profilePictureData");
+        const user = await User.findById(userId).select("profilePictureData profilePictureUpdatedAt");
 
         if (!user || !user.profilePictureData) {
             // Return a default placeholder or 404
@@ -33,10 +33,22 @@ export async function GET(
             buffer = Buffer.from(base64Data, "base64");
         }
 
+        // Use ETag for better cache management
+        const lastModified = user.profilePictureUpdatedAt || user.updatedAt || new Date();
+        const etag = `"${userId}-${lastModified.getTime()}"`;
+        
+        // Check if client has the latest version
+        const ifNoneMatch = request.headers.get('if-none-match');
+        if (ifNoneMatch === etag) {
+            return new NextResponse(null, { status: 304 });
+        }
+
         return new NextResponse(buffer, {
             headers: {
                 "Content-Type": contentType,
-                "Cache-Control": "public, max-age=3600", // Cache for 1 hour
+                "Cache-Control": "public, max-age=300, must-revalidate", // Cache for 5 minutes with revalidation
+                "ETag": etag,
+                "Last-Modified": lastModified.toUTCString(),
             },
         });
 

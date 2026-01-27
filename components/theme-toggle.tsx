@@ -1,41 +1,44 @@
 "use client";
 
 import { Monitor, Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { updatePreferences } from "@/lib/actions/user";
 import { useEffect, useState } from "react";
+import { useCrossWindowTheme } from "@/lib/hooks/useCrossWindowTheme";
 
 interface ThemeToggleProps {
-  userTheme?: "light" | "dark" | "system";
+  user?: {
+    preferences?: {
+      theme?: "light" | "dark" | "system";
+    };
+  };
 }
 
-export function ThemeToggle({ userTheme = "system" }: ThemeToggleProps) {
-  const { theme, setTheme } = useTheme();
+export function ThemeToggle({ user }: ThemeToggleProps) {
+  const { currentTheme, resolvedTheme, isUpdating, changeTheme } = useCrossWindowTheme(user || null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Set theme from user preference on mount
-    if (userTheme && theme !== userTheme) {
-      setTheme(userTheme);
-    }
-  }, [userTheme, theme, setTheme]);
+  }, []);
 
-  const handleThemeChange = async (newTheme: "light" | "dark" | "system") => {
-    setTheme(newTheme);
-    
-    // Save to user preferences
-    try {
-      await updatePreferences({ theme: newTheme });
-    } catch (error) {
-      console.error("Failed to save theme preference:", error);
-    }
-  };
-
+  // Don't render until mounted to prevent hydration issues
   if (!mounted) {
-    return null;
+    return (
+      <div className="space-y-4">
+        <div>
+          <Label className="text-base">Theme</Label>
+          <p className="text-sm text-muted-foreground">
+            Choose your preferred theme or sync with your system.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-16 bg-muted animate-pulse rounded-md" />
+          ))}
+        </div>
+      </div>
+    );
   }
 
   const themes = [
@@ -62,18 +65,28 @@ export function ThemeToggle({ userTheme = "system" }: ThemeToggleProps) {
         <Label className="text-base">Theme</Label>
         <p className="text-sm text-muted-foreground">
           Choose your preferred theme or sync with your system.
+          {currentTheme === "system" && resolvedTheme && (
+            <span className="block text-xs mt-1">
+              Currently using: {resolvedTheme}
+            </span>
+          )}
         </p>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {themes.map((themeOption) => (
           <Button
             key={themeOption.value}
-            variant={theme === themeOption.value ? "default" : "outline"}
+            variant={currentTheme === themeOption.value ? "default" : "outline"}
             size="sm"
-            onClick={() => handleThemeChange(themeOption.value)}
-            className="flex flex-col gap-2 h-auto py-3"
+            onClick={() => changeTheme(themeOption.value)}
+            disabled={isUpdating}
+            className="flex flex-col gap-2 h-auto py-3 transition-all duration-200"
           >
-            {themeOption.icon}
+            {isUpdating && currentTheme === themeOption.value ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            ) : (
+              themeOption.icon
+            )}
             <span className="text-xs">{themeOption.label}</span>
           </Button>
         ))}

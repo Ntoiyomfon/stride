@@ -1,6 +1,33 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/* Prevent theme transition flicker */
+.theme-loading * {
+  transition: none !important;
+}
+
+/* Smooth theme transitions after hydration */
+html {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html:not(.dark) {
+  color-scheme: light;
+}
+
+/* Prevent flash of unstyled content */
+@media (prefers-reduced-motion: no-preference) {
+  html:not(.theme-loading) * {
+    transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

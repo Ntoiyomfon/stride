@@ -76,9 +76,9 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
                                     setActiveTab(tab.value);
                                     setSidebarOpen(false);
                                 }}
-                                className={`w-full flex items-center gap-3 px-3 py-2 text-left rounded-md transition-colors ${
+                                className={`w-full flex items-center gap-3 px-3 py-2 text-left rounded-md transition-all duration-200 ${
                                     activeTab === tab.value
-                                        ? "bg-secondary text-foreground"
+                                        ? "bg-secondary text-foreground shadow-sm"
                                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                                 }`}
                             >
@@ -134,9 +134,9 @@ export default function SettingsLayout({ user }: SettingsLayoutProps) {
                                         <button
                                             key={tab.value}
                                             onClick={() => setActiveTab(tab.value)}
-                                            className={`w-full flex items-center gap-3 px-3 py-2 text-left rounded-md transition-colors ${
+                                            className={`w-full flex items-center gap-3 px-3 py-2 text-left rounded-md transition-all duration-200 hover:scale-[1.02] ${
                                                 activeTab === tab.value
-                                                    ? "bg-secondary text-foreground"
+                                                    ? "bg-secondary text-foreground shadow-sm"
                                                     : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                                             }`}
                                         >

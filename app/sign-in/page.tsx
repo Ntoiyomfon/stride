@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { signIn, signUp } from "@/lib/auth/auth-client";
+import { OAuthButtons } from "@/components/oauth-buttons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -72,22 +73,25 @@ export default function SignIn() {
               Enter your credentials to access your account
             </CardDescription>
           </CardHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <CardContent className="space-y-4">
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="rounded-md bg-destructive/15 p-3 text-sm text-destructive"
-                >
-                  {error}
-                </motion.div>
-              )}
+          <CardContent className="space-y-4">
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="rounded-md bg-destructive/15 p-3 text-sm text-destructive"
+              >
+                {error}
+              </motion.div>
+            )}
+            
+            <OAuthButtons mode="signin" />
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
               <motion.div
                 className="space-y-2"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.1 }}
+                transition={{ delay: 0.4 }}
               >
                 <Label htmlFor="email">
                   Email
@@ -105,7 +109,7 @@ export default function SignIn() {
                 className="space-y-2"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.2 }}
+                transition={{ delay: 0.5 }}
               >
                 <Label htmlFor="password">
                   Password
@@ -154,8 +158,7 @@ export default function SignIn() {
                   </motion.button>
                 </div>
               </motion.div>
-            </CardContent>
-            <CardFooter className="flex flex-col space-y-4">
+              
               <Button
                 type="submit"
                 className="w-full bg-primary hover:bg-primary/90"
@@ -163,17 +166,19 @@ export default function SignIn() {
               >
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
-              <p className="text-center text-sm text-muted-foreground">
-                Don't have an account?{" "}
-                <Link
-                  href="/sign-up"
-                  className="font-medium text-primary hover:underline"
-                >
-                  Sign up
-                </Link>
-              </p>
-            </CardFooter>
-          </form>
+            </form>
+          </CardContent>
+          <CardFooter>
+            <p className="text-center text-sm text-muted-foreground w-full">
+              Don't have an account?{" "}
+              <Link
+                href="/sign-up"
+                className="font-medium text-primary hover:underline"
+              >
+                Sign up
+              </Link>
+            </p>
+          </CardFooter>
         </Card>
       </motion.div>
     </div>

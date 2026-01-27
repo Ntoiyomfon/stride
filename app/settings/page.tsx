@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/actions/user";
 import { getSession } from "@/lib/auth/auth";
-import SettingsLayout from "@/components/settings/settings-layout";
-import { UserThemeSync } from "@/components/user-theme-sync";
-import { AccentColorSync } from "@/components/accent-color-sync";
+import SettingsWrapper from "@/components/settings/settings-wrapper";
+import { PageLoader } from "@/components/loading-spinner";
+import { Suspense } from "react";
 
-export default async function SettingsPage() {
+async function SettingsContent() {
     const session = await getSession();
 
     if (!session?.user) {
@@ -14,21 +14,23 @@ export default async function SettingsPage() {
 
     const user = await getUser();
 
-    return (
-        <>
-            {user ? (
-                <>
-                    <UserThemeSync user={user} />
-                    <AccentColorSync user={user} />
-                    <SettingsLayout user={user} />
-                </>
-            ) : (
-                <div className="min-h-screen bg-background flex items-center justify-center">
-                    <div className="p-8 text-center bg-card rounded-lg border">
-                        <p className="text-foreground">Failed to load user profile.</p>
-                    </div>
+    if (!user) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="p-8 text-center bg-card rounded-lg border">
+                    <p className="text-foreground">Failed to load user profile.</p>
                 </div>
-            )}
-        </>
+            </div>
+        );
+    }
+
+    return <SettingsWrapper initialUser={user} />;
+}
+
+export default async function SettingsPage() {
+    return (
+        <Suspense fallback={<PageLoader text="Loading settings..." />}>
+            <SettingsContent />
+        </Suspense>
     );
 }

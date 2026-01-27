@@ -76,57 +76,56 @@ export default function CreateJobApplicationDialog({
           Add Job
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md sm:max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Add Job Application</DialogTitle>
-          <DialogDescription>Track a new job application</DialogDescription>
+      <DialogContent className="max-w-[85vw] sm:max-w-md max-h-[75vh] overflow-y-auto p-2 sm:p-4">
+        <DialogHeader className="space-y-0 pb-1">
+          <DialogTitle className="text-sm sm:text-base">Add Job</DialogTitle>
+          <DialogDescription className="text-xs hidden sm:block">Track a new job application</DialogDescription>
         </DialogHeader>
-        <form className="space-y-3" onSubmit={handleSubmit}>
-          <div className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="company" className="text-sm">Company *</Label>
-                <Input
-                  id="company"
-                  required
-                  className="text-sm"
-                  value={formData.company}
-                  onChange={(e) =>
-                    setFormData({ ...formData, company: e.target.value })
-                  }
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="position" className="text-sm">Position *</Label>
-                <Input
-                  id="position"
-                  required
-                  className="text-sm"
-                  value={formData.position}
-                  onChange={(e) =>
-                    setFormData({ ...formData, position: e.target.value })
-                  }
-                />
-              </div>
+        <form className="space-y-1.5" onSubmit={handleSubmit}>
+          <div className="space-y-1.5">
+            {/* Minimal essential fields */}
+            <div className="space-y-0.5">
+              <Label htmlFor="company" className="text-xs">Company *</Label>
+              <Input
+                id="company"
+                required
+                className="text-xs h-6 sm:h-8"
+                value={formData.company}
+                onChange={(e) =>
+                  setFormData({ ...formData, company: e.target.value })
+                }
+              />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="location" className="text-sm">Location</Label>
+            <div className="space-y-0.5">
+              <Label htmlFor="position" className="text-xs">Position *</Label>
+              <Input
+                id="position"
+                required
+                className="text-xs h-6 sm:h-8"
+                value={formData.position}
+                onChange={(e) =>
+                  setFormData({ ...formData, position: e.target.value })
+                }
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <div className="space-y-0.5">
+                <Label htmlFor="location" className="text-xs">Location</Label>
                 <Input
                   id="location"
-                  className="text-sm"
+                  className="text-xs h-6 sm:h-8"
                   value={formData.location}
                   onChange={(e) =>
                     setFormData({ ...formData, location: e.target.value })
                   }
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="salary" className="text-sm">Salary</Label>
+              <div className="space-y-0.5">
+                <Label htmlFor="salary" className="text-xs">Salary</Label>
                 <Input
                   id="salary"
-                  className="text-sm"
-                  placeholder="e.g., $100k - $150k"
+                  className="text-xs h-6 sm:h-8"
+                  placeholder="$100k"
                   value={formData.salary}
                   onChange={(e) =>
                     setFormData({ ...formData, salary: e.target.value })
@@ -134,12 +133,12 @@ export default function CreateJobApplicationDialog({
                 />
               </div>
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="jobUrl" className="text-sm">Job URL</Label>
+            <div className="space-y-0.5">
+              <Label htmlFor="jobUrl" className="text-xs">URL</Label>
               <Input
                 id="jobUrl"
                 type="url"
-                className="text-sm"
+                className="text-xs h-6 sm:h-8"
                 placeholder="https://..."
                 value={formData.jobUrl}
                 onChange={(e) =>
@@ -147,37 +146,38 @@ export default function CreateJobApplicationDialog({
                 }
               />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="tags" className="text-sm">Tags (comma-separated)</Label>
+            <div className="space-y-0.5">
+              <Label htmlFor="tags" className="text-xs">Tags</Label>
               <Input
                 id="tags"
-                className="text-sm"
-                placeholder="React, Tailwind, High Pay"
+                className="text-xs h-6 sm:h-8"
+                placeholder="React, Node.js"
                 value={formData.tags}
                 onChange={(e) =>
                   setFormData({ ...formData, tags: e.target.value })
                 }
               />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="description" className="text-sm">Description</Label>
+            <div className="space-y-0.5">
+              <Label htmlFor="description" className="text-xs">Description</Label>
               <Textarea
                 id="description"
-                rows={2}
-                className="text-sm resize-none"
-                placeholder="Brief description of the role..."
+                rows={1}
+                className="text-xs resize-none min-h-[32px] sm:min-h-[40px]"
+                placeholder="Brief description..."
                 value={formData.description}
                 onChange={(e) =>
                   setFormData({ ...formData, description: e.target.value })
                 }
               />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="notes" className="text-sm">Notes</Label>
+            <div className="space-y-0.5">
+              <Label htmlFor="notes" className="text-xs">Notes</Label>
               <Textarea
                 id="notes"
-                rows={2}
-                className="text-sm resize-none"
+                rows={1}
+                className="text-xs resize-none min-h-[32px] sm:min-h-[40px]"
+                placeholder="Notes..."
                 value={formData.notes}
                 onChange={(e) =>
                   setFormData({ ...formData, notes: e.target.value })
@@ -186,16 +186,19 @@ export default function CreateJobApplicationDialog({
             </div>
           </div>
 
-          <DialogFooter className="gap-2 pt-3">
+          <DialogFooter className="gap-1.5 pt-1.5 flex-col sm:flex-row">
             <Button
               type="button"
               variant="outline"
               onClick={() => setOpen(false)}
               size="sm"
+              className="w-full sm:w-auto order-2 sm:order-1 h-7 text-xs"
             >
               Cancel
             </Button>
-            <Button type="submit" size="sm">Add Application</Button>
+            <Button type="submit" size="sm" className="w-full sm:w-auto order-1 sm:order-2 h-7 text-xs">
+              Add Job
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

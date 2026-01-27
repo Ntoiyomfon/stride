@@ -10,15 +10,20 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { updateProfile, updatePreferences, deleteAccount, updateProfilePicture, changePassword } from "@/lib/actions/user";
-import { getTwoFactorStatus, logoutAllSessions } from "@/lib/actions/two-factor";
-import { Loader2, Save, User as UserIcon, Lock, Bell, Download, Trash2, Camera, Eye, EyeOff, Palette, Shield, ShieldCheck, Key, LogOut } from "lucide-react";
+import { getTwoFactorStatus } from "@/lib/actions/two-factor";
+import { Loader2, User as UserIcon, Lock, Bell, Download, Trash2, Camera, Eye, EyeOff, Palette, Shield, ShieldCheck, Key } from "lucide-react";
 import { authClient } from "@/lib/auth/auth-client";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AccentColorSelector } from "@/components/accent-color-selector";
 import { TwoFactorSetup } from "@/components/two-factor-setup";
 import { TwoFactorDisable } from "@/components/two-factor-disable";
+import { ConnectedAccounts } from "@/components/connected-accounts";
+import { SessionManager } from "@/components/session-manager";
 import { BackupCodesManager } from "@/components/backup-codes-manager";
+import { refreshAvatarImages, clearAvatarCache } from "@/lib/utils/avatar-cache";
+import { clearAllClientData } from "@/lib/utils/account-cleanup";
+import { useAvatarKey } from "@/lib/hooks/useAvatarKey";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -47,6 +52,7 @@ interface User {
 
 export default function SettingsTabs({ user, activeTab = "account" }: { user: User; activeTab?: string }) {
     const [loading, setLoading] = useState(false);
+    const { avatarKey, refreshAvatarKey } = useAvatarKey();
     const [profileData, setProfileData] = useState({
         name: user.name,
         image: user.image || "",
@@ -58,6 +64,18 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
     });
 
     const [hasChanges, setHasChanges] = useState(false);
+
+    // Update local state when user prop changes (e.g., after profile update)
+    useEffect(() => {
+        setProfileData({
+            name: user.name,
+            image: user.image || "",
+        });
+        setPreferences({
+            emailNotifications: user.preferences?.emailNotifications ?? true,
+            weeklySummary: user.preferences?.weeklySummary ?? false,
+        });
+    }, [user.name, user.image, user.preferences?.emailNotifications, user.preferences?.weeklySummary]);
 
     // Password State
     const [passwordData, setPasswordData] = useState({
@@ -118,96 +136,6 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
             console.error("Failed to refresh 2FA status:", error);
         }
     };
-
-    const handleLogoutAllSessions = async () => {
-        setLoading(true);
-        try {
-            console.log("Starting logout process...");
-            
-            // Clear client-side storage immediately
-            if (typeof window !== 'undefined') {
-                localStorage.clear();
-                sessionStorage.clear();
-                
-                // Clear all cookies manually
-                document.cookie.split(";").forEach((c) => {
-                    const eqPos = c.indexOf("=");
-                    const name = eqPos > -1 ? c.substr(0, eqPos).trim() : c.trim();
-                    // Clear for current path and root path
-                    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-                    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname}`;
-                });
-            }
-            
-            // Try multiple logout methods
-            let logoutSuccess = false;
-            
-            // Method 1: Try API route (most reliable)
-            try {
-                console.log("Trying API route logout...");
-                const apiResponse = await fetch('/api/auth/logout-all', {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                
-                if (apiResponse.ok) {
-                    console.log("API route logout successful");
-                    logoutSuccess = true;
-                }
-            } catch (apiError) {
-                console.error("API route logout failed:", apiError);
-            }
-            
-            // Method 2: Try client-side signOut
-            try {
-                console.log("Trying client-side signOut...");
-                await authClient.signOut();
-                console.log("Client-side signOut successful");
-                logoutSuccess = true;
-            } catch (clientError) {
-                console.error("Client-side signOut failed:", clientError);
-            }
-            
-            // Method 3: Try server action as fallback
-            if (!logoutSuccess) {
-                try {
-                    console.log("Trying server action logout...");
-                    const result = await logoutAllSessions();
-                    if (result.success) {
-                        console.log("Server action logout successful");
-                        logoutSuccess = true;
-                    }
-                } catch (serverError) {
-                    console.error("Server action logout failed:", serverError);
-                }
-            }
-            
-            if (logoutSuccess) {
-                toast.success("Logged out from all sessions successfully");
-            } else {
-                toast.success("Logged out (some sessions may still be active)");
-            }
-            
-            // Force complete page reload to clear any cached session data
-            setTimeout(() => {
-                window.location.replace("/");
-                // Additional reload to ensure complete cleanup
-                setTimeout(() => {
-                    window.location.reload();
-                }, 100);
-            }, 1000);
-            
-        } catch (error) {
-            console.error("Complete logout failure:", error);
-            toast.error("Logout failed. Please close all browser tabs and reopen.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const onUpdatePassword = async () => {
         if (!passwordData.currentPassword || !passwordData.newPassword) {
             toast.error("Please fill in both password fields");
@@ -251,12 +179,47 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
 
     const onDeleteAccount = async () => {
         setLoading(true);
-        const res = await deleteAccount();
-        if (res.success) {
-            await authClient.signOut();
-            window.location.href = "/";
-        } else {
-            toast.error("Failed to delete account");
+        
+        try {
+            console.log("Starting account deletion process...");
+            
+            // Delete account on server first
+            const res = await deleteAccount();
+            
+            if (res.success) {
+                console.log("Account deleted successfully");
+                toast.success("Account deleted successfully. Redirecting...");
+                
+                // Clear all client-side data
+                try {
+                    clearAllClientData();
+                } catch (clearError) {
+                    console.error("Error clearing client data:", clearError);
+                }
+                
+                // Sign out and redirect
+                try {
+                    await authClient.signOut();
+                } catch (signOutError) {
+                    console.error("AuthClient signOut failed:", signOutError);
+                }
+                
+                // Small delay to show success message, then redirect
+                setTimeout(() => {
+                    window.location.href = '/sign-in';
+                }, 1000);
+                
+            } else {
+                console.error("Account deletion failed:", res.error);
+                toast.error(res.error || "Failed to delete account");
+                setLoading(false);
+            }
+        } catch (error) {
+            console.error("Account deletion error:", error);
+            
+            // More specific error message
+            const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
+            toast.error(`Account deletion failed: ${errorMessage}`);
             setLoading(false);
         }
     };
@@ -268,46 +231,118 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
 
     const handlePreferenceChange = (field: string, value: boolean) => {
         setPreferences(prev => ({ ...prev, [field]: value }));
-        // Auto-save preferences typically, but sticking to "Save" button pattern for consistency if desired, 
-        // though the prompt implied "Sticky save button or per section save".
-        // I'll implement "per section save" for Account, and maybe auto-save for toggles to feel modern,
-        // but the prompt said "Disable save button when no changes". I'll stick to explicit save for everything for now.
         setHasChanges(true);
     };
-
     const onSaveProfile = async () => {
         setLoading(true);
         try {
-            let imageUrl = profileData.image;
+            let finalImageUrl = profileData.image;
+            let imageUploadFailed = false;
+            let nameUpdateFailed = false;
 
-            // If image is a base64 string (new upload), save it to DB via server action
+            // Step 1: Handle image upload if needed
             if (profileData.image && profileData.image.startsWith("data:")) {
-                const res = await updateProfilePicture(profileData.image);
-                if (res.error || !res.imageUrl) {
-                    toast.error(res.error || "Failed to upload image");
-                    setLoading(false);
-                    return;
+                try {
+                    const res = await updateProfilePicture(profileData.image);
+                    if (res.error || !res.imageUrl) {
+                        console.error("Image upload failed:", res.error);
+                        toast.error(res.error || "Failed to upload image");
+                        imageUploadFailed = true;
+                        finalImageUrl = user.image || ""; // Keep original image
+                    } else {
+                        finalImageUrl = res.imageUrl;
+                        // Update local state immediately with the new image URL (with cache buster)
+                        setProfileData(prev => ({ ...prev, image: finalImageUrl }));
+                        
+                        // Force re-render of avatar
+                        refreshAvatarKey();
+                        
+                        // Force refresh all avatar images in the DOM to bypass cache
+                        refreshAvatarImages(finalImageUrl);
+                        
+                        // Also clear cache for this user
+                        if (user._id) {
+                            clearAvatarCache(user._id);
+                        }
+                    }
+                } catch (imageError) {
+                    console.error("Image upload error:", imageError);
+                    imageUploadFailed = true;
+                    finalImageUrl = user.image || "";
                 }
-                imageUrl = res.imageUrl;
             }
 
-            const { error } = await authClient.updateUser({
-                image: imageUrl, // Send the URL, not the base64
-                name: profileData.name,
-            });
+            // Step 2: Update user profile with Better Auth
+            try {
+                const updateData: { name: string; image?: string } = {
+                    name: profileData.name,
+                };
 
-            if (error) {
-                toast.error(error.message || "Failed to update profile");
-                return;
+                // Always include image in update (either new URL or existing)
+                updateData.image = finalImageUrl;
+
+                const { error } = await authClient.updateUser(updateData);
+
+                if (error) {
+                    console.error("Profile update error:", error);
+                    toast.error(error.message || "Failed to update profile");
+                    nameUpdateFailed = true;
+                } else {
+                    // Update local state immediately
+                    setProfileData(prev => ({ 
+                        ...prev, 
+                        name: profileData.name,
+                        image: finalImageUrl 
+                    }));
+                }
+            } catch (updateError) {
+                console.error("Profile update error:", updateError);
+                nameUpdateFailed = true;
+                toast.error("Failed to update profile");
             }
 
-            window.location.reload();
+            // Step 3: Show appropriate success/error messages
+            if (!nameUpdateFailed && !imageUploadFailed) {
+                toast.success("Profile updated successfully!");
+            } else if (!nameUpdateFailed && imageUploadFailed) {
+                toast.success("Name updated successfully! Image upload failed - please try again.");
+            } else if (nameUpdateFailed && !imageUploadFailed) {
+                toast.error("Image uploaded but profile update failed. Please try again.");
+            } else {
+                toast.error("Failed to update profile. Please try again.");
+                return; // Don't proceed with session refresh if everything failed
+            }
+
+            // Step 4: Refresh session and UI only if at least something succeeded
+            if (!nameUpdateFailed) {
+                try {
+                    // Force refresh the auth client session
+                    await authClient.getSession();
+                    
+                    // Update local state
+                    setHasChanges(false);
+                    
+                    // Trigger profile update event for navbar and other components
+                    window.dispatchEvent(new CustomEvent('profile-updated', {
+                        detail: { 
+                            name: profileData.name, 
+                            image: finalImageUrl,
+                            userId: user._id 
+                        }
+                    }));
+                    
+                } catch (refreshError) {
+                    console.error('Failed to refresh session:', refreshError);
+                    // Don't reload page, just show a message
+                    toast.info("Profile updated! Please refresh the page to see changes in the navbar.");
+                }
+            }
+
         } catch (error: any) {
-            console.error("Failed to update profile", error);
-            toast.error(error.message || "Failed to update profile");
+            console.error("Unexpected profile update error:", error);
+            toast.error("An unexpected error occurred. Please try again.");
         } finally {
             setLoading(false);
-            setHasChanges(false);
         }
     };
 
@@ -338,7 +373,6 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
         };
         reader.readAsDataURL(file);
     };
-
     return (
         <Tabs value={activeTab} className="w-full">
             <div className="hidden">
@@ -403,8 +437,11 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                             <CardContent className="space-y-6">
                                 <div className="flex flex-col md:flex-row gap-6 items-start">
                                     <div className="flex flex-col items-center gap-3">
-                                        <Avatar className="h-24 w-24">
-                                            <AvatarImage src={profileData.image} className="object-cover" />
+                                        <Avatar className="h-24 w-24" key={avatarKey}>
+                                            <AvatarImage 
+                                                src={profileData.image ? `${profileData.image}&_=${avatarKey}` : ""} 
+                                                className="object-cover" 
+                                            />
                                             <AvatarFallback className="text-xl bg-primary/10">
                                                 {profileData.name.charAt(0).toUpperCase()}
                                             </AvatarFallback>
@@ -417,12 +454,28 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                                                 id="avatar-upload"
                                                 onChange={handleImageUpload}
                                             />
-                                            <Button variant="outline" size="sm" asChild>
-                                                <label htmlFor="avatar-upload" className="cursor-pointer">
-                                                    <Camera className="mr-2 h-3.5 w-3.5" />
-                                                    Change
-                                                </label>
-                                            </Button>
+                                            <div className="flex gap-2">
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <label htmlFor="avatar-upload" className="cursor-pointer">
+                                                        <Camera className="mr-2 h-3.5 w-3.5" />
+                                                        Change
+                                                    </label>
+                                                </Button>
+                                                <Button 
+                                                    variant="outline" 
+                                                    size="sm" 
+                                                    onClick={() => {
+                                                        refreshAvatarKey();
+                                                        if (user._id) {
+                                                            clearAvatarCache(user._id);
+                                                        }
+                                                        toast.success("Avatar cache cleared");
+                                                    }}
+                                                    type="button"
+                                                >
+                                                    Refresh
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -459,7 +512,6 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                         </Card>
                     </div>
                 </TabsContent>
-
                 {/* SECURITY TAB */}
                 <TabsContent value="security" className="mt-0 space-y-6">
                     <div className="space-y-6">
@@ -630,43 +682,10 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                         </Card>
 
                         {/* Session Management */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Session Management</CardTitle>
-                                <CardDescription>
-                                    Manage your active sessions across all devices.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between rounded-lg border p-4">
-                                        <div className="space-y-1">
-                                            <p className="text-sm font-medium">
-                                                Active Sessions
-                                            </p>
-                                            <p className="text-xs text-muted-foreground">
-                                                Sign out from all devices except this one
-                                            </p>
-                                        </div>
-                                        <LogOut className="h-5 w-5 text-muted-foreground" />
-                                    </div>
-                                </div>
-                            </CardContent>
-                            <CardFooter className="border-t px-6 py-4">
-                                <Button
-                                    variant="outline"
-                                    onClick={handleLogoutAllSessions}
-                                    disabled={loading}
-                                >
-                                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    <LogOut className="mr-2 h-4 w-4" />
-                                    Logout All Sessions
-                                </Button>
-                            </CardFooter>
-                        </Card>
+                        <ConnectedAccounts />
+                        <SessionManager />
                     </div>
                 </TabsContent>
-
                 {/* CUSTOMIZATION TAB */}
                 <TabsContent value="customization" className="mt-0 space-y-6">
                     <div className="space-y-6">
@@ -685,7 +704,7 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <ThemeToggle userTheme={user.preferences?.theme} />
+                                <ThemeToggle user={user} />
                                 <div className="mt-6">
                                     <AccentColorSelector currentColor={user.preferences?.accentColor} />
                                 </div>

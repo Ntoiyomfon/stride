@@ -1,6 +1,7 @@
 "use client";
 
 import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { useEffect, useState } from "react";
 
 export function ThemeProvider({ 
   children,
@@ -12,5 +13,28 @@ export function ThemeProvider({
   enableSystem?: boolean;
   disableTransitionOnChange?: boolean;
 }) {
-  return <NextThemesProvider {...props}>{children}</NextThemesProvider>;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Prevent flash of wrong theme during hydration
+  if (!mounted) {
+    return (
+      <div className="theme-loading">
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <NextThemesProvider 
+      {...props}
+      storageKey="stride-theme"
+      enableColorScheme={false}
+    >
+      {children}
+    </NextThemesProvider>
+  );
 }
