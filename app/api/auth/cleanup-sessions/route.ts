@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       result = await deduplicateSessions();
     }
 
-    if (result.success) {
+    if (result?.success) {
       return NextResponse.json({
         success: true,
         message: `Cleaned up ${result.cleaned} duplicate sessions`,
@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
     } else {
       return NextResponse.json({
         success: false,
-        error: result.error
+        error: result?.error || "Unknown error occurred"
       }, { status: 500 });
     }
   } catch (error) {

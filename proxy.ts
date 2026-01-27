@@ -62,8 +62,8 @@ export default async function proxy(request: NextRequest) {
     }
   }
 
-  // Redirect authenticated users away from auth pages
-  if ((isSignInPage || isSignUpPage) && session?.user) {
+  // Redirect authenticated users away from auth pages and home page
+  if ((isSignInPage || isSignUpPage || isHomePage) && session?.user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

@@ -122,9 +122,9 @@ export const auth = betterAuth({
           });
           
           // Get request headers to identify the browser/device
-          const userAgent = context.headers?.get?.('user-agent') || '';
-          const ipAddress = context.headers?.get?.('x-forwarded-for') || 
-                           context.headers?.get?.('x-real-ip') || 
+          const userAgent = context?.headers?.get?.('user-agent') || '';
+          const ipAddress = context?.headers?.get?.('x-forwarded-for') || 
+                           context?.headers?.get?.('x-real-ip') || 
                            'unknown';
           
           // Immediately clean up ALL existing sessions for this user from the same device/IP
@@ -192,7 +192,7 @@ export const auth = betterAuth({
           
           // Clean up our custom session record
           try {
-            const { Session } = await import("../models/session");
+            const Session = (await import("../models/session")).default;
             await Session.deleteOne({ sessionId: session.id });
             console.log(`Cleaned up custom session record for ${session.id}`);
           } catch (error) {
@@ -228,7 +228,7 @@ export async function signOut() {
       try {
         const { cleanupUserSessions } = await import("../utils/session-deduplication");
         const cleanupResult = await cleanupUserSessions(userId);
-        if (cleanupResult.success && cleanupResult.cleaned > 0) {
+        if (cleanupResult.success && cleanupResult.cleaned && cleanupResult.cleaned > 0) {
           console.log(`Post-logout cleanup: removed ${cleanupResult.cleaned} sessions for user ${userId}`);
         }
       } catch (error) {

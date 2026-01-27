@@ -105,7 +105,7 @@ export async function getUserSessions(userId?: string): Promise<{ sessions?: Ses
         try {
             const { cleanupUserSessions } = await import("../utils/session-deduplication");
             const cleanupResult = await cleanupUserSessions(targetUserId);
-            if (cleanupResult.success && cleanupResult.cleaned > 0) {
+            if (cleanupResult.success && cleanupResult.cleaned && cleanupResult.cleaned > 0) {
                 console.log(`Auto-cleanup: removed ${cleanupResult.cleaned} duplicate sessions for user ${targetUserId}`);
             }
         } catch (error) {

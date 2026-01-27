@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Onest } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/navbar";
-import PageTransition from "@/components/page-transition";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -47,7 +46,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Navbar />
-          <PageTransition>{children}</PageTransition>
+          {children}
           <Toaster />
         </ThemeProvider>
       </body>

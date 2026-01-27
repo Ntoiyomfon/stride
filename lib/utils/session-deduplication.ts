@@ -52,12 +52,13 @@ export async function deduplicateSessions() {
 
       // For each device, keep only the most recent session
       for (const [deviceKey, deviceSessions] of Object.entries(sessionsByDevice)) {
-        if (deviceSessions.length <= 1) {
+        const sessions = deviceSessions as any[];
+        if (sessions.length <= 1) {
           continue;
         }
 
         // Sort by creation date (most recent first)
-        const sortedSessions = deviceSessions.sort((a, b) => 
+        const sortedSessions = sessions.sort((a, b) => 
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
         );
 
@@ -94,7 +95,7 @@ export async function deduplicateSessions() {
     return { success: true, cleaned: totalCleaned };
   } catch (error) {
     console.error('Session deduplication error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -177,6 +178,6 @@ export async function cleanupUserSessions(userId: string) {
     return { success: true, cleaned };
   } catch (error) {
     console.error('User session cleanup error:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
