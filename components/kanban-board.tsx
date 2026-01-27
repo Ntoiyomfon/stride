@@ -128,7 +128,7 @@ function DroppableColumn({
 
       <CardContent
         ref={setNodeRef}
-        className={`space-y-2 pt-1.5 md:pt-3 bg-gray-50/50 min-h-[340px] md:min-h-[340px] rounded-b-lg ${isOver ? "ring-2 ring-blue-500" : ""
+        className={`space-y-2 pt-1.5 md:pt-3 bg-muted/30 min-h-[340px] md:min-h-[340px] rounded-b-lg ${isOver ? "ring-2 ring-primary" : ""
           }`}
       >
         <SortableContext

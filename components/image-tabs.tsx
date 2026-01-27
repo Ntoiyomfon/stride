@@ -30,7 +30,7 @@ export default function ImageTab() {
     const [activeTab, setActiveTab] = useState("organize");
 
     return (
-        <section className="bg-white py-16">
+        <section className="bg-card py-16">
             <div className="container mx-auto px-4">
                 <div className="mx-auto max-w-6xl">
                     {/* Tabs */}
@@ -41,7 +41,7 @@ export default function ImageTab() {
                                 onClick={() => setActiveTab(tab.id)}
                                 className={cn(
                                     "relative rounded-lg px-4 md:px-6 py-2 md:py-3 text-xs md:text-sm font-medium transition-colors w-full md:w-auto outline-none",
-                                    activeTab === tab.id ? "text-white" : "text-gray-600 hover:text-black"
+                                    activeTab === tab.id ? "text-white" : "text-muted-foreground hover:text-foreground"
                                 )}
                             >
                                 {/* Active Tab Background Animation */}
@@ -60,7 +60,7 @@ export default function ImageTab() {
                     </div>
 
                     {/* Image Content Animation */}
-                    <div className="relative mx-auto max-w-5xl aspect-[3/2] overflow-hidden rounded-lg border-gray-200 shadow-xl bg-gray-100">
+                    <div className="relative mx-auto max-w-5xl aspect-[3/2] overflow-hidden rounded-lg border shadow-xl bg-muted">
                         <AnimatePresence mode="wait" initial={false}>
                             {tabs.map(
                                 (tab) =>

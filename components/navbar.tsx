@@ -11,11 +11,12 @@ import {
     DropdownMenuLabel,
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "./ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import SignOutButton from "./sign-out-btn";
 import { useSession } from "@/lib/auth/auth-client";
 import { FolderKanban } from 'lucide-react';
 import SettingsPageBtn from "./settings-page-btn";
+import { ThemeToggleButton } from "./theme-toggle-button";
 
 export default function Navbar() {
     const { data: session } = useSession();
@@ -31,6 +32,7 @@ export default function Navbar() {
                     Stride
                 </Link>
                 <div className="flex items-center gap-4">
+                    <ThemeToggleButton />
                     {session?.user ? (
                         <>
                             <Link href="/dashboard">
@@ -48,6 +50,7 @@ export default function Navbar() {
                                         className="relative h-8 w-8 rounded-full"
                                     >
                                         <Avatar className="h-8 w-8">
+                                            <AvatarImage src={session.user.image || ""} className="object-cover" />
                                             <AvatarFallback className="bg-primary text-white">
                                                 {session.user.name[0].toUpperCase()}
                                             </AvatarFallback>

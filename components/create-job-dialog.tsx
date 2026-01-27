@@ -76,20 +76,20 @@ export default function CreateJobApplicationDialog({
           Add Job
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-[90vw] md:max-w-md max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-md sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base md:text-lg">Add Job Application</DialogTitle>
-          <DialogDescription className="text-xs">Track a new job application</DialogDescription>
+          <DialogTitle>Add Job Application</DialogTitle>
+          <DialogDescription>Track a new job application</DialogDescription>
         </DialogHeader>
-        <form className="space-y-2.5 md:space-y-3" onSubmit={handleSubmit}>
-          <div className="space-y-2.5 md:space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 md:gap-3">
+        <form className="space-y-3" onSubmit={handleSubmit}>
+          <div className="space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="company" className="text-xs">Company *</Label>
+                <Label htmlFor="company" className="text-sm">Company *</Label>
                 <Input
                   id="company"
                   required
-                  className="text-xs h-7 md:h-9"
+                  className="text-sm"
                   value={formData.company}
                   onChange={(e) =>
                     setFormData({ ...formData, company: e.target.value })
@@ -97,11 +97,11 @@ export default function CreateJobApplicationDialog({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="position" className="text-xs">Position *</Label>
+                <Label htmlFor="position" className="text-sm">Position *</Label>
                 <Input
                   id="position"
                   required
-                  className="text-xs h-7 md:h-9"
+                  className="text-sm"
                   value={formData.position}
                   onChange={(e) =>
                     setFormData({ ...formData, position: e.target.value })
@@ -109,12 +109,12 @@ export default function CreateJobApplicationDialog({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 md:gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label htmlFor="location" className="text-xs">Location</Label>
+                <Label htmlFor="location" className="text-sm">Location</Label>
                 <Input
                   id="location"
-                  className="text-xs h-7 md:h-9"
+                  className="text-sm"
                   value={formData.location}
                   onChange={(e) =>
                     setFormData({ ...formData, location: e.target.value })
@@ -122,10 +122,10 @@ export default function CreateJobApplicationDialog({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="salary" className="text-xs">Salary</Label>
+                <Label htmlFor="salary" className="text-sm">Salary</Label>
                 <Input
                   id="salary"
-                  className="text-xs h-7 md:h-9"
+                  className="text-sm"
                   placeholder="e.g., $100k - $150k"
                   value={formData.salary}
                   onChange={(e) =>
@@ -135,11 +135,11 @@ export default function CreateJobApplicationDialog({
               </div>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="jobUrl" className="text-xs">Job URL</Label>
+              <Label htmlFor="jobUrl" className="text-sm">Job URL</Label>
               <Input
                 id="jobUrl"
                 type="url"
-                className="text-xs h-7 md:h-9"
+                className="text-sm"
                 placeholder="https://..."
                 value={formData.jobUrl}
                 onChange={(e) =>
@@ -148,10 +148,10 @@ export default function CreateJobApplicationDialog({
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="tags" className="text-xs">Tags (comma-separated)</Label>
+              <Label htmlFor="tags" className="text-sm">Tags (comma-separated)</Label>
               <Input
                 id="tags"
-                className="text-xs h-7 md:h-9"
+                className="text-sm"
                 placeholder="React, Tailwind, High Pay"
                 value={formData.tags}
                 onChange={(e) =>
@@ -160,11 +160,11 @@ export default function CreateJobApplicationDialog({
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="description" className="text-xs">Description</Label>
+              <Label htmlFor="description" className="text-sm">Description</Label>
               <Textarea
                 id="description"
                 rows={2}
-                className="text-xs min-h-[50px]"
+                className="text-sm resize-none"
                 placeholder="Brief description of the role..."
                 value={formData.description}
                 onChange={(e) =>
@@ -173,11 +173,11 @@ export default function CreateJobApplicationDialog({
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="notes" className="text-xs">Notes</Label>
+              <Label htmlFor="notes" className="text-sm">Notes</Label>
               <Textarea
                 id="notes"
-                rows={3}
-                className="text-xs min-h-[60px]"
+                rows={2}
+                className="text-sm resize-none"
                 value={formData.notes}
                 onChange={(e) =>
                   setFormData({ ...formData, notes: e.target.value })
@@ -186,15 +186,16 @@ export default function CreateJobApplicationDialog({
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2 pt-3">
             <Button
               type="button"
               variant="outline"
               onClick={() => setOpen(false)}
+              size="sm"
             >
               Cancel
             </Button>
-            <Button type="submit">Add Application</Button>
+            <Button type="submit" size="sm">Add Application</Button>
           </DialogFooter>
         </form>
       </DialogContent>

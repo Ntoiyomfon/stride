@@ -137,16 +137,16 @@ export default function Home() {
   }, []);
 
   return (
-    <div className="flex min-h-screen flex-col bg-white overflow-x-hidden">
+    <div className="flex min-h-screen flex-col bg-background overflow-x-hidden">
       <main className="flex-1 overflow-x-hidden">
         {/* Hero section */}
         <section ref={heroRef} className="container mx-auto px-4 py-16 sm:py-24 md:py-32">
           <div className="mx-auto max-w-4xl text-center">
             <h2
               ref={titleRef}
-              className="text-black mb-4 sm:mb-6 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight"
+              className="text-foreground mb-4 sm:mb-6 text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight"
             >
-              A better way to track your job applications.
+              Track every job applications in one places. 
             </h2>
             <p
               ref={subtitleRef}
@@ -173,14 +173,14 @@ export default function Home() {
         </div>
 
         {/* Features Section */}
-        <section ref={featuresRef} className="border-t bg-white py-16 sm:py-20 md:py-24">
+        <section ref={featuresRef} className="border-t bg-card py-16 sm:py-20 md:py-24">
           <div className="container mx-auto px-4">
             <div className="grid gap-8 sm:gap-10 md:gap-12 grid-cols-1 md:grid-cols-3">
               <div className="feature-card flex flex-col items-center md:items-start text-center md:text-left">
                 <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                   <Briefcase className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="mb-2 sm:mb-3 text-xl sm:text-2xl font-semibold text-black">
+                <h3 className="mb-2 sm:mb-3 text-xl sm:text-2xl font-semibold text-foreground">
                   Organize Applications
                 </h3>
                 <p className="text-sm sm:text-base text-muted-foreground">
@@ -192,7 +192,7 @@ export default function Home() {
                 <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                   <TrendingUp className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="mb-2 sm:mb-3 text-xl sm:text-2xl font-semibold text-black">
+                <h3 className="mb-2 sm:mb-3 text-xl sm:text-2xl font-semibold text-foreground">
                   Track Progress
                 </h3>
                 <p className="text-sm sm:text-base text-muted-foreground">
@@ -204,7 +204,7 @@ export default function Home() {
                 <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
                   <CheckCircle2 className="h-6 w-6 text-primary" />
                 </div>
-                <h3 className="mb-2 sm:mb-3 text-xl sm:text-2xl font-semibold text-black">
+                <h3 className="mb-2 sm:mb-3 text-xl sm:text-2xl font-semibold text-foreground">
                   Stay Organized
                 </h3>
                 <p className="text-sm sm:text-base text-muted-foreground">

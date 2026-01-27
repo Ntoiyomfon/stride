@@ -53,7 +53,7 @@ export default function SignIn() {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-white p-4">
+    <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-background p-4">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -63,12 +63,12 @@ export default function SignIn() {
           delay: 0.1
         }}
       >
-        <Card className="w-full max-w-md border-gray-200 shadow-lg">
+        <Card className="w-full max-w-md shadow-lg">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-black">
+            <CardTitle className="text-2xl font-bold text-foreground">
               Sign In
             </CardTitle>
-            <CardDescription className="text-gray-600">
+            <CardDescription>
               Enter your credentials to access your account
             </CardDescription>
           </CardHeader>
@@ -89,18 +89,17 @@ export default function SignIn() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
               >
-                <Label htmlFor="email" className="text-gray-700">
+                <Label htmlFor="email">
                   Email
                 </Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  required
-                  className="border-gray-300 focus:border-primary focus:ring-primary"
-                />
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                  />
               </motion.div>
               <motion.div
                 className="space-y-2"
@@ -108,7 +107,7 @@ export default function SignIn() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <Label htmlFor="password" className="text-gray-700">
+                <Label htmlFor="password">
                   Password
                 </Label>
                 <div className="relative">
@@ -119,12 +118,12 @@ export default function SignIn() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     minLength={8}
-                    className="border-gray-300 focus:border-primary focus:ring-primary pr-10"
+                    className="pr-10"
                   />
                   <motion.button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     whileHover={{ scale: 1.1 }}
                     whileTap={{ scale: 0.9 }}
@@ -164,7 +163,7 @@ export default function SignIn() {
               >
                 {loading ? "Signing in..." : "Sign In"}
               </Button>
-              <p className="text-center text-sm text-gray-600">
+              <p className="text-center text-sm text-muted-foreground">
                 Don't have an account?{" "}
                 <Link
                   href="/sign-up"

@@ -4,6 +4,8 @@ import connectDB from "@/lib/db";
 import { Board } from "@/lib/models";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { getUser } from "@/lib/actions/user";
+import { AccentColorSync } from "@/components/accent-color-sync";
 
 async function getBoard(userId: string) {
   "use cache";
@@ -30,17 +32,19 @@ async function getBoard(userId: string) {
 async function DashboardPage() {
   const session = await getSession();
   const board = await getBoard(session?.user.id ?? "");
+  const user = await getUser();
 
   if (!session?.user) {
     redirect("/sign-in");
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
+      {user && <AccentColorSync user={user} />}
       <div className="container mx-auto p-6">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-black">Job Hunt</h1>
-          <p className="text-gray-600">Track your job applications</p>
+          <h1 className="text-3xl font-bold text-foreground">Job Hunt</h1>
+          <p className="text-muted-foreground">Track your job applications</p>
         </div>
         <KanbanBoard board={board} userId={session.user.id} />
       </div>
