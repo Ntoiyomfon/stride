@@ -21,7 +21,7 @@ async function applySessionRevocationFix() {
       $$ LANGUAGE plpgsql SECURITY DEFINER;
     `;
     
-    const { error: error1 } = await supabase.rpc('exec_sql', { sql: revokeSessionFunction });
+    const { error: error1 } = await supabase.rpc('exec_sql', { sql: revokeSessionFunction } as any);
     if (error1) {
       console.error('❌ Failed to update revoke_session function:', error1);
     } else {
@@ -47,7 +47,7 @@ async function applySessionRevocationFix() {
       $$ LANGUAGE plpgsql SECURITY DEFINER;
     `;
     
-    const { error: error2 } = await supabase.rpc('exec_sql', { sql: revokeAllFunction });
+    const { error: error2 } = await supabase.rpc('exec_sql', { sql: revokeAllFunction } as any);
     if (error2) {
       console.error('❌ Failed to update revoke_all_other_sessions function:', error2);
     } else {

@@ -45,11 +45,11 @@ export function ConnectedAccounts() {
       const connectedProviders: ConnectedProvider[] = [];
       
       // Add OAuth providers from user profile
-      if (user.auth_providers && Array.isArray(user.auth_providers)) {
-        user.auth_providers.forEach((provider: string) => {
+      if ((user as any).auth_providers && Array.isArray((user as any).auth_providers)) {
+        (user as any).auth_providers.forEach((provider: string) => {
           connectedProviders.push({
             provider,
-            connectedAt: new Date(user.created_at) // Use account creation date as fallback
+            connectedAt: new Date((user as any).created_at) // Use account creation date as fallback
           });
         });
       }
@@ -58,7 +58,7 @@ export function ConnectedAccounts() {
       if (connectedProviders.length === 0) {
         connectedProviders.push({
           provider: 'email',
-          connectedAt: new Date(user.created_at)
+          connectedAt: new Date((user as any).created_at)
         });
       }
 

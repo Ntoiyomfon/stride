@@ -85,6 +85,8 @@ export default function SignIn() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="absolute top-8 left-8">
+      </div>
       
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
