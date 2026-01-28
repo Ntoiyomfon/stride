@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/auth";
-import { authClient } from "@/lib/auth/auth-client";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
 
 export async function POST(request: NextRequest) {
     try {
-        const session = await getSession();
+        const sessionResult = await AuthService.validateServerSession();
         
-        if (!session?.user) {
+        if (!sessionResult.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -19,7 +18,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            currentUser: session.user,
+            currentUser: sessionResult.user,
             updateData,
             message: "Profile update test endpoint"
         });

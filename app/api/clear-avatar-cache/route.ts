@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/auth";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
 
 export async function POST(request: NextRequest) {
     try {
-        const session = await getSession();
+        const sessionResult = await AuthService.validateServerSession();
         
-        if (!session?.user) {
+        if (!sessionResult.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
                 success: true, 
                 message: "Cache cleared",
                 timestamp: Date.now(),
-                userId: session.user.id
+                userId: sessionResult.user.id
             },
             {
                 headers: {

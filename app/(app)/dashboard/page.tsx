@@ -1,33 +1,75 @@
 import KanbanBoard from "@/components/kanban-board";
-import { getSession } from "@/lib/auth/auth";
-import connectDB from "@/lib/db";
-import { Board } from "@/lib/models";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
+import { createSupabaseServerClient } from "@/lib/supabase/utils";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { getUser } from "@/lib/actions/user";
 import { AccentColorSync } from "@/components/accent-color-sync";
 import { PageLoader } from "@/components/loading-spinner";
+import { BoardInitializer } from "@/components/board-initializer";
 
 async function getBoard(userId: string) {
-  "use cache";
+  console.log('🔍 Fetching board for user:', userId);
 
-  await connectDB();
+  try {
+    const supabase = await createSupabaseServerClient();
 
-  const boardDoc = await Board.findOne({
-    userId: userId,
-    name: "Job Hunt",
-  }).populate({
-    path: "columns",
-    populate: {
-      path: "jobApplications",
-    },
-  });
+    // First, let's try to get the user to make sure auth is working
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log('👤 Auth user check:', { user: user?.id, userError });
 
-  if (!boardDoc) return null;
+    const { data: board, error } = await supabase
+      .from('boards')
+      .select(`
+        *,
+        columns (
+          *,
+          job_applications (*)
+        )
+      `)
+      .eq('user_id', userId)
+      .eq('name', 'Job Hunt')
+      .single();
 
-  const board = JSON.parse(JSON.stringify(boardDoc));
+    console.log('📊 Board query result:', { board, error });
 
-  return board;
+    if (error) {
+      console.error('❌ Board query error:', error);
+      
+      // If RLS is blocking, try using service role as fallback
+      console.log('🔧 Trying service role fallback...');
+      const { createSupabaseServiceClient } = await import('@/lib/supabase/utils');
+      const serviceSupabase = await createSupabaseServiceClient();
+      
+      const { data: fallbackBoard, error: fallbackError } = await serviceSupabase
+        .from('boards')
+        .select(`
+          *,
+          columns (
+            *,
+            job_applications (*)
+          )
+        `)
+        .eq('user_id', userId)
+        .eq('name', 'Job Hunt')
+        .single();
+
+      console.log('🔧 Service role query result:', { fallbackBoard, fallbackError });
+      
+      if (fallbackError) {
+        console.error('❌ Service role query also failed:', fallbackError);
+        return null;
+      }
+      
+      return fallbackBoard;
+    }
+
+    console.log('✅ Board found with columns:', (board as any)?.columns?.length || 0);
+    return board;
+  } catch (err) {
+    console.error('❌ Exception in getBoard:', err);
+    return null;
+  }
 }
 
 // Client component for animations
@@ -40,7 +82,12 @@ function DashboardContent({ board, userId, user }: { board: any; userId: string;
           <h1 className="text-3xl font-bold text-foreground">Job Hunt</h1>
           <p className="text-muted-foreground">Track your job applications</p>
         </div>
-        <KanbanBoard board={board} userId={userId} />
+        
+        {board ? (
+          <KanbanBoard board={board} user_id={userId} />
+        ) : (
+          <BoardInitializer />
+        )}
       </div>
     </div>
   );
@@ -48,9 +95,9 @@ function DashboardContent({ board, userId, user }: { board: any; userId: string;
 
 async function DashboardPage() {
   // CRITICAL: Check authentication FIRST before any data fetching
-  const session = await getSession();
+  const sessionResult = await AuthService.validateServerSession();
 
-  if (!session?.user) {
+  if (!sessionResult.user) {
     redirect("/sign-in");
   }
 
@@ -62,9 +109,9 @@ async function DashboardPage() {
   }
 
   // Only fetch board data after confirming user is authenticated and exists
-  const board = await getBoard(session.user.id);
+  const board = await getBoard(sessionResult.user.id);
 
-  return <DashboardContent board={board} userId={session.user.id} user={user} />;
+  return <DashboardContent board={board} userId={sessionResult.user.id} user={user} />;
 }
 
 export default async function Dashboard() {

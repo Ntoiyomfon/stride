@@ -1,8 +1,9 @@
 "use client";
 
-import { JobApplication, Column } from "@/lib/models/models.types";
+import { JobApplication } from "@/lib/types/job-application";
+import { Column } from "@/lib/types/column";
 import { Card, CardContent } from "./ui/card";
-import { Edit2, ExternalLink, MoreVertical, Plus, Trash2 } from "lucide-react";
+import { Edit2, ExternalLink, MoreVertical, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,8 +45,8 @@ export default function JobApplicationCard({
     location: job.location || "",
     notes: job.notes || "",
     salary: job.salary || "",
-    jobUrl: job.jobUrl || "",
-    columnId: job.columnId || "",
+    jobUrl: job.job_url || "",
+    columnId: job.column_id || "",
     tags: job.tags?.join(", ") || "",
     description: job.description || "",
   });
@@ -53,7 +54,7 @@ export default function JobApplicationCard({
   async function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const result = await updateJobApplication(job._id, {
+      const result = await updateJobApplication(job.id, {
         ...formData,
         tags: formData.tags
           .split(",")
@@ -71,7 +72,7 @@ export default function JobApplicationCard({
 
   async function handleDelete() {
     try {
-      const result = await deleteJobApplication(job._id);
+      const result = await deleteJobApplication(job.id);
 
       if (result.error) {
         console.error("Failed to delete job application:", result.error);
@@ -83,7 +84,7 @@ export default function JobApplicationCard({
 
   async function handleMove(newColumnId: string) {
     try {
-      const result = await updateJobApplication(job._id, {
+      await updateJobApplication(job.id, {
         columnId: newColumnId,
       });
     } catch (err) {
@@ -120,9 +121,9 @@ export default function JobApplicationCard({
                   ))}
                 </div>
               )}
-              {job.jobUrl && (
+              {job.job_url && (
                 <a
-                  href={job.jobUrl}
+                  href={job.job_url}
                   target="_blank"
                   className="inline-flex items-center gap-1 text-[10px] md:text-xs text-primary hover:underline mt-0.5"
                   onClick={(e) => e.stopPropagation()}
@@ -146,11 +147,11 @@ export default function JobApplicationCard({
                   {columns.length > 1 && (
                     <>
                       {columns
-                        .filter((c) => c._id !== job.columnId)
+                        .filter((c) => c.id !== job.column_id)
                         .map((column, key) => (
                           <DropdownMenuItem
                             key={key}
-                            onClick={() => handleMove(column._id)}
+                            onClick={() => handleMove(column.id)}
                           >
                             Move to {column.name}
                           </DropdownMenuItem>

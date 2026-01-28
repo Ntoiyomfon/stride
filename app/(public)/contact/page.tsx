@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mail, MessageSquare, HelpCircle, Bug } from "lucide-react";
+import { BackToHomeButton } from "@/components/back-to-home-button";
 
 export const metadata: Metadata = {
   title: "Contact Us - Stride",
@@ -14,6 +15,10 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <div className="container mx-auto px-4 py-16 max-w-6xl">
+      <div className="mb-8">
+        <BackToHomeButton />
+      </div>
+      
       <div className="text-center mb-12">
         <h1 className="text-4xl font-bold text-foreground mb-4">Contact Us</h1>
         <p className="text-lg text-muted-foreground max-w-2xl mx-auto">

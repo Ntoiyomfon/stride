@@ -10,7 +10,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import SignOutButton from "./sign-out-btn";
-import { useSession } from "@/lib/auth/auth-client";
+import { useSupabaseAuth } from "@/lib/hooks/useSupabaseAuth";
 import { FolderKanban } from 'lucide-react';
 import SettingsPageBtn from "./settings-page-btn";
 import { ThemeToggleButton } from "./theme-toggle-button";
@@ -20,15 +20,12 @@ import { useAvatarKey } from "@/lib/hooks/useAvatarKey";
 import { useUserPreferences } from "@/lib/hooks/useUserPreferences";
 
 export default function Navbar() {
-    const { data: session, refetch } = useSession();
+    const { user, session, loading, profile, refreshProfile } = useSupabaseAuth();
     const { avatarKey, refreshAvatarKey } = useAvatarKey();
-    const { user } = useUserPreferences();
+    const { user: userPreferences } = useUserPreferences();
     
     // Listen for profile updates and refresh session data
-    const handleProfileUpdate = useCallback((event: any) => {
-        // Refetch session data to get updated profile info
-        refetch();
-        
+    const handleProfileUpdate = useCallback(async (event: any) => {
         // Clear avatar cache if userId is provided
         if (event.detail?.userId) {
             clearAvatarCache(event.detail.userId);
@@ -36,7 +33,13 @@ export default function Navbar() {
         
         // Force re-render of avatar by updating key
         refreshAvatarKey();
-    }, [refetch, refreshAvatarKey]);
+        
+        // Refresh the profile data from the database
+        await refreshProfile();
+        
+        // Force another re-render after profile is refreshed
+        setTimeout(() => refreshAvatarKey(), 100);
+    }, [refreshAvatarKey, refreshProfile]);
 
     useEffect(() => {
         window.addEventListener('profile-updated', handleProfileUpdate);
@@ -54,11 +57,10 @@ export default function Navbar() {
                     className="flex items-center gap-2 text-xl font-semibold text-primary hover:opacity-80 transition-opacity"
                 >
                     <FolderKanban />
-                    Stride
                 </Link>
                 <div className="flex items-center gap-4">
-                    <ThemeToggleButton user={user || undefined} />
-                    {session?.user ? (
+                    <ThemeToggleButton user={userPreferences || undefined} />
+                    {user ? (
                         <>
                             <Link href="/dashboard">
                                 <Button
@@ -76,11 +78,11 @@ export default function Navbar() {
                                     >
                                         <Avatar className="h-8 w-8" key={avatarKey}>
                                             <AvatarImage 
-                                                src={session.user.image ? `${session.user.image}&_=${avatarKey}` : ""} 
+                                                src={profile?.profile_picture_data || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || ""} 
                                                 className="object-cover" 
                                             />
                                             <AvatarFallback className="bg-primary text-white">
-                                                {session.user.name[0].toUpperCase()}
+                                                {(profile?.name || user?.user_metadata?.full_name || user?.email || 'U')[0].toUpperCase()}
                                             </AvatarFallback>
                                         </Avatar>
                                     </Button>
@@ -90,10 +92,10 @@ export default function Navbar() {
                                     <DropdownMenuLabel className="font-normal">
                                         <div className="flex flex-col space-y-1">
                                             <p className="text-sm font-medium leading-none">
-                                                {session.user.name}
+                                                {profile?.name || user?.user_metadata?.full_name || 'User'}
                                             </p>
                                             <p className="text-xs leading-none text-muted-foreground">
-                                                {session.user.email}
+                                                {user?.email}
                                             </p>
                                         </div>
                                     </DropdownMenuLabel>
@@ -112,11 +114,11 @@ export default function Navbar() {
                                     Log In
                                 </Button>
                             </Link>
-                            <Link href="/sign-up">
+                            {/* <Link href="/sign-up">
                                 <Button className="bg-primary hover:bg-primary/90 transition-colors">
                                     Start for free
                                 </Button>
-                            </Link>
+                            </Link> */}
                         </>
                     )}
                 </div>

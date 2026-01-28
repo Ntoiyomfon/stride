@@ -1,47 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/auth";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
 import { getUser } from "@/lib/actions/user";
-import connectDB from "@/lib/db";
-import { Board, Column, JobApplication } from "@/lib/models";
-import Session from "@/lib/models/session";
+import { createSupabaseServerClient } from "@/lib/supabase/utils";
 
 export async function GET(request: NextRequest) {
     try {
-        const session = await getSession();
+        const sessionResult = await AuthService.validateServerSession();
         
-        if (!session?.user) {
+        if (!sessionResult.user) {
             return NextResponse.json({ 
                 authenticated: false,
                 message: "No active session"
             });
         }
 
-        await connectDB();
+        const supabase = await createSupabaseServerClient();
         
         // Check if user exists in database
         const user = await getUser();
         
         // Count user's data
-        const [boards, jobApplications, sessions] = await Promise.all([
-            Board.countDocuments({ userId: session.user.id }),
-            JobApplication.countDocuments({ userId: session.user.id }),
-            Session.countDocuments({ userId: session.user.id })
+        const [boardsResult, jobApplicationsResult, sessionsResult] = await Promise.all([
+            supabase.from('boards').select('id', { count: 'exact' }).eq('user_id', sessionResult.user.id),
+            supabase.from('job_applications').select('id', { count: 'exact' }).eq('user_id', sessionResult.user.id),
+            supabase.from('sessions').select('id', { count: 'exact' }).eq('user_id', sessionResult.user.id)
         ]);
 
         return NextResponse.json({
             authenticated: true,
             userExists: !!user,
-            sessionUserId: session.user.id,
-            sessionId: session.session?.id,
+            sessionUserId: sessionResult.user.id,
+            sessionId: sessionResult.session?.access_token,
             userData: user ? {
-                id: user._id,
-                name: user.name,
-                email: user.email
+                id: (user as any).id,
+                name: (user as any).name,
+                email: (user as any).email
             } : null,
             dataCount: {
-                boards,
-                jobApplications,
-                sessions
+                boards: boardsResult.count || 0,
+                jobApplications: jobApplicationsResult.count || 0,
+                sessions: sessionsResult.count || 0
             }
         });
     } catch (error) {

@@ -1,14 +1,14 @@
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/actions/user";
-import { getSession } from "@/lib/auth/auth";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
 import SettingsWrapper from "@/components/settings/settings-wrapper";
 import { PageLoader } from "@/components/loading-spinner";
 import { Suspense } from "react";
 
 async function SettingsContent() {
-    const session = await getSession();
+    const sessionResult = await AuthService.validateServerSession();
 
-    if (!session?.user) {
+    if (!sessionResult.user) {
         redirect("/sign-in");
     }
 

@@ -11,12 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { signUp } from "@/lib/auth/auth-client";
+import { authService } from "@/lib/auth/supabase-auth-service";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { OAuthButtons } from "@/components/oauth-buttons";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function SignUp() {
@@ -30,6 +30,16 @@ export default function SignUp() {
 
   const router = useRouter();
 
+  // Clear form when component mounts
+  useEffect(() => {
+    setName("");
+    setEmail("");
+    setPassword("");
+    setError("");
+    setLoading(false);
+    setShowPassword(false);
+  }, []);
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -37,14 +47,14 @@ export default function SignUp() {
     setLoading(true);
 
     try {
-      const result = await signUp.email({
+      const result = await authService.signUp({
         name,
         email,
         password,
       });
 
-      if (result.error) {
-        setError(result.error.message ?? "Failed to sign up");
+      if (!result.success) {
+        setError(result.error?.message ?? "Failed to sign up");
       } else {
         router.push("/dashboard");
       }
@@ -57,6 +67,7 @@ export default function SignUp() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}

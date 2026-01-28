@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Copy, Check, Key, RefreshCw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { regenerateBackupCodes } from "@/lib/actions/two-factor";
+import { generateBackupCodes } from "@/lib/actions/two-factor";
 
 interface BackupCodesManagerProps {
     isOpen: boolean;
@@ -31,13 +31,13 @@ export function BackupCodesManager({ isOpen, onClose, backupCodesCount }: Backup
 
         setLoading(true);
         try {
-            const result = await regenerateBackupCodes(verificationCode);
-            if (result.error) {
-                toast.error(result.error);
+            const result = await generateBackupCodes();
+            if (!result.success || result.error) {
+                toast.error(typeof result.error === 'string' ? result.error : result.error?.message || 'Failed to generate backup codes');
                 return;
             }
 
-            setNewBackupCodes(result.backupCodes!);
+            setNewBackupCodes((result as any).data || []);
             setStep("codes");
             toast.success("New backup codes generated");
         } catch (error) {

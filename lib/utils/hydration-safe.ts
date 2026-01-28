@@ -13,6 +13,7 @@ export function useHydrationSafeValue<T>(serverValue: T, clientValue: T): T {
     const [isClient, setIsClient] = useState(false);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setIsClient(true);
     }, []);
 
@@ -23,7 +24,13 @@ export function useHydrationSafeValue<T>(serverValue: T, clientValue: T): T {
  * Hook to safely generate timestamps without hydration issues
  */
 export function useHydrationSafeTimestamp(): number {
-    return useHydrationSafeValue(0, Date.now());
+    const [timestamp, setTimestamp] = useState(0);
+
+    useEffect(() => {
+        setTimestamp(Date.now());
+    }, []);
+
+    return timestamp;
 }
 
 /**

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import LayoutWrapper from "@/components/layout-wrapper";
+import { SessionSync } from "@/components/session-sync";
 
 const onest = Onest({
   variable: "--font-onest",
@@ -45,6 +46,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <SessionSync />
           <LayoutWrapper>
             {children}
           </LayoutWrapper>

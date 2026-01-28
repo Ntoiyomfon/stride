@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/auth";
-import { getUserSessions, cleanupExpiredSessions } from "@/lib/actions/session-management";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
+import { getUserSessions, cleanupExpiredSessions } from "@/lib/actions/supabase-session-management";
 
 export async function GET(request: NextRequest) {
     try {
-        const session = await getSession();
+        const sessionResult = await AuthService.validateServerSession();
         
-        if (!session?.user) {
+        if (!sessionResult.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
         const result = await getUserSessions();
         
         return NextResponse.json({
-            currentSession: session.session?.id,
-            userId: session.user.id,
+            currentSession: sessionResult.session?.access_token,
+            userId: sessionResult.user.id,
             sessions: result.sessions || [],
             error: result.error
         });
@@ -26,9 +26,9 @@ export async function GET(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
     try {
-        const session = await getSession();
+        const sessionResult = await AuthService.validateServerSession();
         
-        if (!session?.user) {
+        if (!sessionResult.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 

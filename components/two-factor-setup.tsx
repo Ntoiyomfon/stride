@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, Copy, Check, Shield, Smartphone, Key } from "lucide-react";
 import { toast } from "sonner";
-import { initiateTwoFactor, verifyTwoFactorSetup } from "@/lib/actions/two-factor";
+import { enrollMFA, verifyMFAEnrollment, generateBackupCodes } from "@/lib/actions/two-factor";
 
 interface TwoFactorSetupProps {
     isOpen: boolean;
@@ -21,6 +21,7 @@ export function TwoFactorSetup({ isOpen, onClose, onComplete }: TwoFactorSetupPr
     const [loading, setLoading] = useState(false);
     const [qrCode, setQrCode] = useState("");
     const [secret, setSecret] = useState("");
+    const [factorId, setFactorId] = useState("");
     const [verificationCode, setVerificationCode] = useState("");
     const [backupCodes, setBackupCodes] = useState<string[]>([]);
     const [copiedSecret, setCopiedSecret] = useState(false);
@@ -29,14 +30,21 @@ export function TwoFactorSetup({ isOpen, onClose, onComplete }: TwoFactorSetupPr
     const handleInitiate = async () => {
         setLoading(true);
         try {
-            const result = await initiateTwoFactor();
-            if (result.error) {
-                toast.error(result.error);
+            const result = await enrollMFA();
+            if (!result.success) {
+                toast.error((result as any).error?.toString() || "Failed to enroll MFA");
                 return;
             }
 
-            setQrCode(result.qrCode!);
-            setSecret(result.secret!);
+            const successResult = result as any;
+            if (!successResult.data) {
+                toast.error("No enrollment data received");
+                return;
+            }
+
+            setFactorId(successResult.data.id);
+            setQrCode(successResult.data.totp.qr_code);
+            setSecret(successResult.data.totp.secret);
             setStep("verify");
         } catch (error) {
             toast.error("Failed to initiate 2FA setup");
@@ -53,13 +61,18 @@ export function TwoFactorSetup({ isOpen, onClose, onComplete }: TwoFactorSetupPr
 
         setLoading(true);
         try {
-            const result = await verifyTwoFactorSetup(verificationCode);
-            if (result.error) {
-                toast.error(result.error);
+            const result = await verifyMFAEnrollment(factorId, verificationCode);
+            if (!result.success || result.error) {
+                toast.error((result as any).error?.toString() || "Failed to verify MFA");
                 return;
             }
 
-            setBackupCodes(result.backupCodes!);
+            // Generate backup codes after successful verification
+            const backupResult = await generateBackupCodes();
+            if (backupResult.success && (backupResult as any).data) {
+                setBackupCodes((backupResult as any).data);
+            }
+            
             setStep("backup");
             toast.success("Two-factor authentication enabled successfully!");
         } catch (error) {

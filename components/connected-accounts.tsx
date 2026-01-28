@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { getConnectedProviders, disconnectProvider } from "@/lib/actions/oauth";
-import { linkSocial } from "@/lib/auth/auth-client";
+import { getUser } from "@/lib/actions/user";
+import { authService } from "@/lib/auth/supabase-auth-service";
 import { Loader2, Link as LinkIcon, Unlink, Shield } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface ConnectedProvider {
-  provider: string; // Changed from specific union to string to handle any provider
+  provider: string;
   connectedAt: Date;
 }
 
@@ -34,15 +34,39 @@ export function ConnectedAccounts() {
 
   const loadProviders = async () => {
     try {
-      const result = await getConnectedProviders();
-      if (result.success && result.providers) {
-        setProviders(result.providers);
-      } else if (result.error) {
-        toast.error(result.error);
+      // Get user profile to check connected providers
+      const user = await getUser();
+      if (!user) {
+        console.error('No user found');
+        setProviders([]);
+        return;
       }
+
+      const connectedProviders: ConnectedProvider[] = [];
+      
+      // Add OAuth providers from user profile
+      if (user.auth_providers && Array.isArray(user.auth_providers)) {
+        user.auth_providers.forEach((provider: string) => {
+          connectedProviders.push({
+            provider,
+            connectedAt: new Date(user.created_at) // Use account creation date as fallback
+          });
+        });
+      }
+
+      // If no providers found, default to email
+      if (connectedProviders.length === 0) {
+        connectedProviders.push({
+          provider: 'email',
+          connectedAt: new Date(user.created_at)
+        });
+      }
+
+      setProviders(connectedProviders);
     } catch (error) {
       console.error('Failed to load connected providers:', error);
-      toast.error('Failed to load connected accounts');
+      // Don't show toast error to avoid spam
+      setProviders([{ provider: 'email', connectedAt: new Date() }]);
     } finally {
       setLoading(false);
     }
@@ -72,11 +96,11 @@ export function ConnectedAccounts() {
     setConnecting(provider);
     
     try {
-      // Use BetterAuth linkSocial method - this should maintain the current session
-      await linkSocial({
-        provider,
-        callbackURL: '/settings?tab=security',
-      });
+      // Use Supabase OAuth linking
+      const result = await authService.signInWithOAuth(provider);
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Failed to connect account');
+      }
       
       // Refresh providers list after successful linking
       setTimeout(() => {
@@ -94,13 +118,8 @@ export function ConnectedAccounts() {
     setDisconnecting(provider);
     
     try {
-      const result = await disconnectProvider(provider);
-      if (result.success) {
-        toast.success(result.message);
-        await loadProviders(); // Refresh the list
-      } else if (result.error) {
-        toast.error(result.error);
-      }
+      // This will be implemented when we add OAuth provider management
+      toast.info(`${getProviderName(provider)} disconnect functionality will be available soon`);
     } catch (error) {
       console.error(`Failed to disconnect ${provider}:`, error);
       toast.error(`Failed to disconnect ${provider} account`);
@@ -184,8 +203,8 @@ export function ConnectedAccounts() {
     );
   }
 
-  const connectedProviders = providers.filter(p => p.provider !== 'email');
-  const hasEmailAuth = providers.some(p => p.provider === 'email');
+  const connectedProviders = providers.slice(1); // All providers except the first one
+  const primaryProvider = providers[0]; // First provider is primary
   const availableProviders = ['google', 'github'].filter(
     p => !providers.some(cp => cp.provider === p)
   );
@@ -202,18 +221,18 @@ export function ConnectedAccounts() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Email Authentication */}
-        {hasEmailAuth && (
+        {/* Primary Authentication */}
+        {primaryProvider && (
           <div className="space-y-2">
             <h4 className="text-sm font-medium">Primary Authentication</h4>
             <div className="rounded-lg border p-4 bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  {getProviderIcon('email')}
+                  {getProviderIcon(primaryProvider.provider)}
                   <div>
-                    <span className="font-medium text-sm">Email & Password</span>
+                    <span className="font-medium text-sm">{getProviderName(primaryProvider.provider)}</span>
                     <p className="text-xs text-muted-foreground">
-                      Connected {formatDate(providers.find(p => p.provider === 'email')?.connectedAt || new Date())}
+                      Connected {formatDate(primaryProvider.connectedAt)}
                     </p>
                   </div>
                 </div>
@@ -225,12 +244,12 @@ export function ConnectedAccounts() {
           </div>
         )}
 
-        {/* Connected Social Accounts */}
+        {/* Connected Additional Accounts */}
         {connectedProviders.length > 0 && (
           <>
-            {hasEmailAuth && <Separator />}
+            <Separator />
             <div className="space-y-2">
-              <h4 className="text-sm font-medium">Social Accounts ({connectedProviders.length})</h4>
+              <h4 className="text-sm font-medium">Additional Accounts ({connectedProviders.length})</h4>
               <div className="space-y-3">
                 {connectedProviders.map((provider) => (
                   <div key={provider.provider} className="rounded-lg border p-4">
@@ -314,29 +333,6 @@ export function ConnectedAccounts() {
                     )}
                     <span className="ml-2">Connect {getProviderName(provider)}</span>
                   </Button>
-                ))}
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Show already connected providers that can't be connected again */}
-        {['google', 'github'].filter(p => providers.some(cp => cp.provider === p)).length > 0 && (
-          <>
-            {availableProviders.length === 0 && <Separator />}
-            <div className="space-y-2">
-              {availableProviders.length > 0 && (
-                <h4 className="text-sm font-medium mt-4">Already Connected</h4>
-              )}
-              <div className="space-y-2">
-                {['google', 'github'].filter(p => providers.some(cp => cp.provider === p)).map((provider) => (
-                  <div
-                    key={provider}
-                    className="w-full flex items-center justify-start p-3 border rounded-md bg-muted/50 opacity-60"
-                  >
-                    {getProviderIcon(provider)}
-                    <span className="ml-2 text-sm">{getProviderName(provider)} - Already Connected</span>
-                  </div>
                 ))}
               </div>
             </div>

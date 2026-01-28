@@ -13,11 +13,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn, signUp } from "@/lib/auth/auth-client";
+import { authService } from "@/lib/auth/supabase-auth-service";
 import { OAuthButtons } from "@/components/oauth-buttons";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -26,8 +26,38 @@ export default function SignIn() {
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const router = useRouter();
+
+  // Check for success message from password reset and OAuth errors
+  useEffect(() => {
+    // Clear form fields
+    setEmail("");
+    setPassword("");
+    setError("");
+    setSuccessMessage("");
+    setLoading(false);
+    
+    // Check for URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    
+    // Check for success message from password reset
+    if (urlParams.get('message') === 'password-reset-success') {
+      setSuccessMessage("Password reset successful! You can now sign in with your new password.");
+    }
+    
+    // Check for OAuth errors
+    if (urlParams.get('error') === 'oauth_error') {
+      const errorMessage = urlParams.get('message') || 'OAuth authentication failed';
+      setError(decodeURIComponent(errorMessage));
+    }
+    
+    // Clean up URL if there are parameters
+    if (urlParams.toString()) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,13 +66,13 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      const result = await signIn.email({
+      const result = await authService.signIn({
         email,
         password,
       });
 
-      if (result.error) {
-        setError(result.error.message ?? "Failed to sign in");
+      if (!result.success) {
+        setError(result.error?.message ?? "Failed to sign in");
       } else {
         router.push("/dashboard");
       }
@@ -55,6 +85,7 @@ export default function SignIn() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -74,6 +105,16 @@ export default function SignIn() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {successMessage && (
+              <motion.div
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="rounded-md bg-green-50 dark:bg-green-950/20 p-3 text-sm text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
+              >
+                {successMessage}
+              </motion.div>
+            )}
+            
             {error && (
               <motion.div
                 initial={{ opacity: 0, x: -10 }}
@@ -156,6 +197,17 @@ export default function SignIn() {
                       )}
                     </AnimatePresence>
                   </motion.button>
+                </div>
+                <div className="text-center mt-2">
+                  <p className="text-sm text-muted-foreground">
+                    Can't access your account?{" "}
+                    <Link
+                      href="/recovery"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Use recovery code
+                    </Link>
+                  </p>
                 </div>
               </motion.div>
               

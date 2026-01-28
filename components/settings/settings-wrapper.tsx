@@ -7,10 +7,10 @@ import { UserThemeSync } from "@/components/user-theme-sync";
 import { AccentColorSync } from "@/components/accent-color-sync";
 
 interface User {
-    _id: string;
+    id: string;
     name: string;
     email: string;
-    image?: string;
+    profile_picture_data?: string;
     preferences?: {
         emailNotifications?: boolean;
         weeklySummary?: boolean;

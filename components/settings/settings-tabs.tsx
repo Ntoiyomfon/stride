@@ -10,9 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { updateProfile, updatePreferences, deleteAccount, updateProfilePicture, changePassword } from "@/lib/actions/user";
-import { getTwoFactorStatus } from "@/lib/actions/two-factor";
+import { get2FAStatus } from "@/lib/actions/two-factor";
 import { Loader2, User as UserIcon, Lock, Bell, Download, Trash2, Camera, Eye, EyeOff, Palette, Shield, ShieldCheck, Key } from "lucide-react";
-import { authClient } from "@/lib/auth/auth-client";
+import { authService } from "@/lib/auth/supabase-auth-service";
 import { toast } from "sonner";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AccentColorSelector } from "@/components/accent-color-selector";
@@ -37,10 +37,10 @@ import {
 } from "@/components/ui/alert-dialog";
 
 interface User {
-    _id: string;
+    id: string;
     name: string;
     email: string;
-    image?: string;
+    profile_picture_data?: string;
     preferences?: {
         emailNotifications?: boolean;
         weeklySummary?: boolean;
@@ -55,7 +55,7 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
     const { avatarKey, refreshAvatarKey } = useAvatarKey();
     const [profileData, setProfileData] = useState({
         name: user.name,
-        image: user.image || "",
+        image: user.profile_picture_data || "",
     });
 
     const [preferences, setPreferences] = useState({
@@ -69,13 +69,13 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
     useEffect(() => {
         setProfileData({
             name: user.name,
-            image: user.image || "",
+            image: user.profile_picture_data || "",
         });
         setPreferences({
             emailNotifications: user.preferences?.emailNotifications ?? true,
             weeklySummary: user.preferences?.weeklySummary ?? false,
         });
-    }, [user.name, user.image, user.preferences?.emailNotifications, user.preferences?.weeklySummary]);
+    }, [user.name, user.profile_picture_data, user.preferences?.emailNotifications, user.preferences?.weeklySummary]);
 
     // Password State
     const [passwordData, setPasswordData] = useState({
@@ -100,13 +100,13 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
     useEffect(() => {
         const load2FAStatus = async () => {
             try {
-                const result = await getTwoFactorStatus();
-                if (result.success) {
+                const result = await get2FAStatus();
+                if (result.success && result.data) {
                     setTwoFactorStatus({
-                        enabled: result.enabled,
-                        backupCodesCount: result.backupCodesCount,
-                        verifiedAt: result.verifiedAt ? new Date(result.verifiedAt) : null,
-                        lastUsedAt: result.lastUsedAt ? new Date(result.lastUsedAt) : null,
+                        enabled: result.data.enabled,
+                        backupCodesCount: result.data.backupCodesCount,
+                        verifiedAt: null, // This data isn't returned by get2FAStatus
+                        lastUsedAt: null, // This data isn't returned by get2FAStatus
                     });
                 }
             } catch (error) {
@@ -123,13 +123,13 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
 
     const refresh2FAStatus = async () => {
         try {
-            const result = await getTwoFactorStatus();
-            if (result.success) {
+            const result = await get2FAStatus();
+            if (result.success && result.data) {
                 setTwoFactorStatus({
-                    enabled: result.enabled,
-                    backupCodesCount: result.backupCodesCount,
-                    verifiedAt: result.verifiedAt ? new Date(result.verifiedAt) : null,
-                    lastUsedAt: result.lastUsedAt ? new Date(result.lastUsedAt) : null,
+                    enabled: result.data.enabled,
+                    backupCodesCount: result.data.backupCodesCount,
+                    verifiedAt: null,
+                    lastUsedAt: null,
                 });
             }
         } catch (error) {
@@ -166,7 +166,7 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
 
             // Sign out after a short delay to let the toast be seen
             setTimeout(async () => {
-                await authClient.signOut();
+                await authService.signOut();
                 window.location.href = "/sign-in";
             }, 2000);
         } catch (error: any) {
@@ -199,9 +199,9 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                 
                 // Sign out and redirect
                 try {
-                    await authClient.signOut();
+                    await authService.signOut();
                 } catch (signOutError) {
-                    console.error("AuthClient signOut failed:", signOutError);
+                    console.error("AuthService signOut failed:", signOutError);
                 }
                 
                 // Small delay to show success message, then redirect
@@ -244,13 +244,14 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
             if (profileData.image && profileData.image.startsWith("data:")) {
                 try {
                     const res = await updateProfilePicture(profileData.image);
-                    if (res.error || !res.imageUrl) {
+                    if (res.error || !res.success) {
                         console.error("Image upload failed:", res.error);
                         toast.error(res.error || "Failed to upload image");
                         imageUploadFailed = true;
-                        finalImageUrl = user.image || ""; // Keep original image
+                        finalImageUrl = user.profile_picture_data || ""; // Keep original image
                     } else {
-                        finalImageUrl = res.imageUrl;
+                        // Image was updated successfully, keep the current image data
+                        finalImageUrl = profileData.image;
                         // Update local state immediately with the new image URL (with cache buster)
                         setProfileData(prev => ({ ...prev, image: finalImageUrl }));
                         
@@ -261,14 +262,14 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                         refreshAvatarImages(finalImageUrl);
                         
                         // Also clear cache for this user
-                        if (user._id) {
-                            clearAvatarCache(user._id);
+                        if (user.id) {
+                            clearAvatarCache(user.id);
                         }
                     }
                 } catch (imageError) {
                     console.error("Image upload error:", imageError);
                     imageUploadFailed = true;
-                    finalImageUrl = user.image || "";
+                    finalImageUrl = user.profile_picture_data || "";
                 }
             }
 
@@ -278,14 +279,15 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                     name: profileData.name,
                 };
 
-                // Always include image in update (either new URL or existing)
-                updateData.image = finalImageUrl;
+                // Update profile using server action
+                const result = await updateProfile({
+                    name: profileData.name,
+                    profilePictureData: finalImageUrl
+                });
 
-                const { error } = await authClient.updateUser(updateData);
-
-                if (error) {
-                    console.error("Profile update error:", error);
-                    toast.error(error.message || "Failed to update profile");
+                if (!result.success) {
+                    console.error("Profile update error:", result.error);
+                    toast.error(result.error || "Failed to update profile");
                     nameUpdateFailed = true;
                 } else {
                     // Update local state immediately
@@ -316,9 +318,6 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
             // Step 4: Refresh session and UI only if at least something succeeded
             if (!nameUpdateFailed) {
                 try {
-                    // Force refresh the auth client session
-                    await authClient.getSession();
-                    
                     // Update local state
                     setHasChanges(false);
                     
@@ -327,7 +326,7 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                         detail: { 
                             name: profileData.name, 
                             image: finalImageUrl,
-                            userId: user._id 
+                            userId: user.id 
                         }
                     }));
                     
@@ -348,7 +347,7 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
 
     const onSavePreferences = async () => {
         setLoading(true);
-        await updatePreferences(preferences);
+        await updatePreferences({ notifications: preferences });
         setLoading(false);
         setHasChanges(false);
     };
@@ -439,7 +438,7 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                                     <div className="flex flex-col items-center gap-3">
                                         <Avatar className="h-24 w-24" key={avatarKey}>
                                             <AvatarImage 
-                                                src={profileData.image ? `${profileData.image}&_=${avatarKey}` : ""} 
+                                                src={profileData.image || ""} 
                                                 className="object-cover" 
                                             />
                                             <AvatarFallback className="text-xl bg-primary/10">
@@ -460,20 +459,6 @@ export default function SettingsTabs({ user, activeTab = "account" }: { user: Us
                                                         <Camera className="mr-2 h-3.5 w-3.5" />
                                                         Change
                                                     </label>
-                                                </Button>
-                                                <Button 
-                                                    variant="outline" 
-                                                    size="sm" 
-                                                    onClick={() => {
-                                                        refreshAvatarKey();
-                                                        if (user._id) {
-                                                            clearAvatarCache(user._id);
-                                                        }
-                                                        toast.success("Avatar cache cleared");
-                                                    }}
-                                                    type="button"
-                                                >
-                                                    Refresh
                                                 </Button>
                                             </div>
                                         </div>

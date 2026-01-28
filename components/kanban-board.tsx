@@ -1,6 +1,8 @@
 "use client";
 
-import { Board, Column, JobApplication } from "@/lib/models/models.types";
+import { Board } from "@/lib/types/board";
+import { ColumnWithApplications } from "@/lib/types/column";
+import { JobApplication } from "@/lib/types/job-application";
 import {
   Award,
   Calendar,
@@ -43,7 +45,7 @@ import { useState } from "react";
 
 interface KanbanBoardProps {
   board: Board;
-  userId: string;
+  user_id: string;
 }
 
 interface ColConfig {
@@ -79,21 +81,21 @@ function DroppableColumn({
   boardId,
   sortedColumns,
 }: {
-  column: Column;
+  column: ColumnWithApplications;
   config: ColConfig;
   boardId: string;
-  sortedColumns: Column[];
+  sortedColumns: ColumnWithApplications[];
 }) {
   const { setNodeRef, isOver } = useDroppable({
-    id: column._id,
+    id: column.id,
     data: {
       type: "column",
-      columnId: column._id,
+      columnId: column.id,
     },
   });
 
   const sortedJobs =
-    column.jobApplications?.sort((a, b) => a.order - b.order) || [];
+    column.job_applications?.sort((a, b) => a.order_index - b.order_index) || [];
   return (
     <Card className="min-w-[215px] md:min-w-[240px] flex-shrink-0 shadow-md p-0">
       <CardHeader
@@ -132,19 +134,19 @@ function DroppableColumn({
           }`}
       >
         <SortableContext
-          items={sortedJobs.map((job) => job._id)}
+          items={sortedJobs.map((job) => job.id)}
           strategy={verticalListSortingStrategy}
         >
           {sortedJobs.map((job, key) => (
             <SortableJobCard
               key={key}
-              job={{ ...job, columnId: job.columnId || column._id }}
+              job={{ ...job, column_id: job.column_id || column.id }}
               columns={sortedColumns}
             />
           ))}
         </SortableContext>
 
-        <CreateJobApplicationDialog columnId={column._id} boardId={boardId} />
+        <CreateJobApplicationDialog columnId={column.id} boardId={boardId} />
       </CardContent>
     </Card>
   );
@@ -155,7 +157,7 @@ function SortableJobCard({
   columns,
 }: {
   job: JobApplication;
-  columns: Column[];
+  columns: ColumnWithApplications[];
 }) {
   const {
     attributes,
@@ -165,7 +167,7 @@ function SortableJobCard({
     isDragging,
     setNodeRef,
   } = useSortable({
-    id: job._id,
+    id: job.id,
     data: {
       type: "job",
       job,
@@ -188,11 +190,11 @@ function SortableJobCard({
   );
 }
 
-export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
+export default function KanbanBoard({ board, user_id }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const { columns, moveJob } = useBoard(board);
 
-  const sortedColumns = columns?.sort((a, b) => a.order - b.order) || [];
+  const sortedColumns = columns?.sort((a, b) => a.order_index - b.order_index) || [];
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -211,19 +213,19 @@ export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
 
     setActiveId(null);
 
-    if (!over || !board._id) return;
+    if (!over || !board.id) return;
 
     const activeId = active.id as string;
     const overId = over.id as string;
 
     let draggedJob: JobApplication | null = null;
-    let sourceColumn: Column | null = null;
+    let sourceColumn: ColumnWithApplications | null = null;
     let sourceIndex = -1;
 
     for (const column of sortedColumns) {
       const jobs =
-        column.jobApplications.sort((a, b) => a.order - b.order) || [];
-      const jobIndex = jobs.findIndex((j) => j._id === activeId);
+        column.job_applications?.sort((a, b) => a.order_index - b.order_index) || [];
+      const jobIndex = jobs.findIndex((j) => j.id === activeId);
       if (jobIndex !== -1) {
         draggedJob = jobs[jobIndex];
         sourceColumn = column;
@@ -235,50 +237,50 @@ export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
     if (!draggedJob || !sourceColumn) return;
 
     // Check if dropped in a column or another job
-    const targetColumn = sortedColumns.find((col) => col._id === overId);
+    const targetColumn = sortedColumns.find((col) => col.id === overId);
     const targetJob = sortedColumns
-      .flatMap((col) => col.jobApplications || [])
-      .find((job) => job._id === overId);
+      .flatMap((col) => col.job_applications || [])
+      .find((job) => job.id === overId);
 
     let targetColumnId: string;
     let newOrder: number;
 
     if (targetColumn) {
-      targetColumnId = targetColumn._id;
+      targetColumnId = targetColumn.id;
       const jobsInTarget =
-        targetColumn.jobApplications
-          .filter((j) => j._id !== activeId)
-          .sort((a, b) => a.order - b.order) || [];
+        targetColumn.job_applications
+          ?.filter((j) => j.id !== activeId)
+          .sort((a, b) => a.order_index - b.order_index) || [];
       newOrder = jobsInTarget.length;
     } else if (targetJob) {
       const targetJobColumn = sortedColumns.find((col) =>
-        col.jobApplications.some((j) => j._id === targetJob._id)
+        col.job_applications?.some((j) => j.id === targetJob.id)
       );
-      targetColumnId = targetJob.columnId || targetJobColumn?._id || "";
+      targetColumnId = targetJob.column_id || targetJobColumn?.id || "";
       if (!targetColumnId) return;
 
       const targetColumnObj = sortedColumns.find(
-        (col) => col._id === targetColumnId
+        (col) => col.id === targetColumnId
       );
 
       if (!targetColumnObj) return;
 
       const allJobsInTargetOriginal =
-        targetColumnObj.jobApplications.sort((a, b) => a.order - b.order) || [];
+        targetColumnObj.job_applications?.sort((a, b) => a.order_index - b.order_index) || [];
 
       const allJobsInTargetFiltered =
-        allJobsInTargetOriginal.filter((j) => j._id !== activeId) || [];
+        allJobsInTargetOriginal.filter((j) => j.id !== activeId) || [];
 
       const targetIndexInOriginal = allJobsInTargetOriginal.findIndex(
-        (j) => j._id === overId
+        (j) => j.id === overId
       );
 
       const targetIndexInFiltered = allJobsInTargetFiltered.findIndex(
-        (j) => j._id === overId
+        (j) => j.id === overId
       );
 
       if (targetIndexInFiltered !== -1) {
-        if (sourceColumn._id === targetColumnId) {
+        if (sourceColumn.id === targetColumnId) {
           if (sourceIndex < targetIndexInOriginal) {
             newOrder = targetIndexInFiltered + 1;
           } else {
@@ -302,8 +304,8 @@ export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
   }
 
   const activeJob = sortedColumns
-    .flatMap((col) => col.jobApplications || [])
-    .find((job) => job._id === activeId);
+    .flatMap((col) => col.job_applications || [])
+    .find((job) => job.id === activeId);
   return (
     <DndContext
       sensors={sensors}
@@ -323,7 +325,7 @@ export default function KanbanBoard({ board, userId }: KanbanBoardProps) {
                 key={key}
                 column={col}
                 config={config}
-                boardId={board._id}
+                boardId={board.id}
                 sortedColumns={sortedColumns}
               />
             );

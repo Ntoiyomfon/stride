@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { signIn } from "@/lib/auth/auth-client";
+import { authService } from "@/lib/auth/supabase-auth-service";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Loader2 } from "lucide-react";
@@ -17,13 +17,19 @@ export function OAuthButtons({ mode }: OAuthButtonsProps) {
     setLoadingProvider(provider);
     
     try {
-      await signIn.social({
-        provider,
-        callbackURL: "/dashboard",
-      });
+      const result = await authService.signInWithOAuth(provider);
+      if (!result.success) {
+        console.error(`${provider} sign-in error:`, result.error);
+        setLoadingProvider(null);
+        // Show error to user
+        alert(`Failed to sign in with ${provider}: ${result.error?.message || 'Unknown error'}`);
+      }
+      // On success, the user will be redirected by the OAuth flow
+      // The redirect happens in the signInWithOAuth method
     } catch (error) {
       console.error(`${provider} sign-in error:`, error);
       setLoadingProvider(null);
+      alert(`Failed to sign in with ${provider}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 

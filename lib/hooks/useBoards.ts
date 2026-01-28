@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Board, Column, JobApplication } from "../models/models.types";
+import { Board } from "../types/board";
+import { ColumnWithApplications } from "../types/column";
+import { JobApplication } from "../types/job-application";
 import { updateJobApplication } from "../actions/job-applications";
 
 export function useBoard(initialBoard?: Board | null) {
   const [board, setBoard] = useState<Board | null>(initialBoard || null);
-  const [columns, setColumns] = useState<Column[]>(initialBoard?.columns || []);
+  const [columns, setColumns] = useState<ColumnWithApplications[]>((initialBoard as any)?.columns || []);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (initialBoard) {
       setBoard(initialBoard);
-      setColumns(initialBoard.columns || []);
+      setColumns((initialBoard as any)?.columns || []);
     }
   }, [initialBoard]);
 
@@ -24,23 +26,22 @@ export function useBoard(initialBoard?: Board | null) {
     setColumns((prev) => {
       const newColumns = prev.map((col) => ({
         ...col,
-        jobApplications: [...col.jobApplications],
+        job_applications: [...col.job_applications],
       }));
 
       // Find and remove job from the old column
-
       let jobToMove: JobApplication | null = null;
       let oldColumnId: string | null = null;
 
       for (const col of newColumns) {
-        const jobIndex = col.jobApplications.findIndex(
-          (j) => j._id === jobApplicationId
+        const jobIndex = col.job_applications.findIndex(
+          (j) => j.id === jobApplicationId
         );
         if (jobIndex !== -1 && jobIndex !== undefined) {
-          jobToMove = col.jobApplications[jobIndex];
-          oldColumnId = col._id;
-          col.jobApplications = col.jobApplications.filter(
-            (job) => job._id !== jobApplicationId
+          jobToMove = col.job_applications[jobIndex];
+          oldColumnId = col.id;
+          col.job_applications = col.job_applications.filter(
+            (job) => job.id !== jobApplicationId
           );
           break;
         }
@@ -48,27 +49,27 @@ export function useBoard(initialBoard?: Board | null) {
 
       if (jobToMove && oldColumnId) {
         const targetColumnIndex = newColumns.findIndex(
-          (col) => col._id === newColumnId
+          (col) => col.id === newColumnId
         );
         if (targetColumnIndex !== -1) {
           const targetColumn = newColumns[targetColumnIndex];
-          const currentJobs = targetColumn.jobApplications || [];
+          const currentJobs = targetColumn.job_applications || [];
 
           const updatedJobs = [...currentJobs];
           updatedJobs.splice(newOrder, 0, {
             ...jobToMove,
-            columnId: newColumnId,
-            order: newOrder * 100,
+            column_id: newColumnId,
+            order_index: newOrder * 100,
           });
 
           const jobsWithUpdatedOrders = updatedJobs.map((job, idx) => ({
             ...job,
-            order: idx * 100,
+            order_index: idx * 100,
           }));
 
           newColumns[targetColumnIndex] = {
             ...targetColumn,
-            jobApplications: jobsWithUpdatedOrders,
+            job_applications: jobsWithUpdatedOrders,
           };
         }
       }
@@ -77,7 +78,7 @@ export function useBoard(initialBoard?: Board | null) {
     });
 
     try {
-      const result = await updateJobApplication(jobApplicationId, {
+      await updateJobApplication(jobApplicationId, {
         columnId: newColumnId,
         order: newOrder,
       });

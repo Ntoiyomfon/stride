@@ -8,10 +8,10 @@ import { User as UserIcon, Lock, Bell, Download, Trash2, Camera, Eye, EyeOff, Pa
 import SettingsTabs from "./settings-tabs";
 
 interface User {
-    _id: string;
+    id: string;
     name: string;
     email: string;
-    image?: string;
+    profile_picture_data?: string;
     preferences?: {
         emailNotifications?: boolean;
         weeklySummary?: boolean;

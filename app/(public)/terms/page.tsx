@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { BackToHomeButton } from "@/components/back-to-home-button";
 
 export const metadata: Metadata = {
   title: "Terms of Service - Stride",
@@ -8,6 +9,10 @@ export const metadata: Metadata = {
 export default function TermsPage() {
   return (
     <div className="container mx-auto px-4 py-16 max-w-4xl">
+      <div className="mb-8">
+        <BackToHomeButton />
+      </div>
+      
       <div className="prose prose-gray dark:prose-invert max-w-none">
         <h1 className="text-4xl font-bold text-foreground mb-8">Terms of Service</h1>
         

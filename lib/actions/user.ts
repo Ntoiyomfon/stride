@@ -1,284 +1,322 @@
 "use server";
 
-import { getSession } from "@/lib/auth/auth";
-import connectDB from "@/lib/db";
-import User from "@/lib/models/user";
-import { Board, Column, JobApplication } from "@/lib/models/index";
-import Session from "@/lib/models/session";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
+import { createSupabaseServerClient, createSupabaseServiceClient } from "@/lib/supabase/utils";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
-import { auth } from "@/lib/auth/auth";
-import mongoose from "mongoose";
+import type { Database } from "@/lib/supabase/database.types";
 
 interface UpdateProfileData {
-    name?: string;
-    image?: string;
+  name?: string;
+  email?: string;
+  profilePictureData?: string | null;
 }
 
 interface UpdatePreferencesData {
+  theme?: 'light' | 'dark' | 'system';
+  accentColor?: 'red' | 'blue' | 'green' | 'yellow' | 'gray' | 'pink';
+  notifications?: {
     emailNotifications?: boolean;
     weeklySummary?: boolean;
-    defaultBoardView?: string;
-    theme?: "light" | "dark" | "system";
-    accentColor?: "red" | "blue" | "green" | "yellow" | "gray" | "pink";
-}
-
-export async function updateProfile(data: UpdateProfileData) {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
-    try {
-        const updatedUser = await User.findByIdAndUpdate(
-            session.user.id,
-            { $set: data },
-            { new: true }
-        ).select("-password");
-
-        revalidatePath("/settings");
-        revalidatePath("/dashboard"); // To update avatar in navbar
-
-        // Serialize to plain object
-        return { success: true, user: JSON.parse(JSON.stringify(updatedUser)) };
-    } catch (error) {
-        console.error("Failed to update profile:", error);
-        return { error: "Failed to update profile" };
-    }
-}
-
-export async function updateProfilePicture(base64: string) {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
-    try {
-        // Add timestamp for cache busting
-        const timestamp = Date.now();
-        const imageUrl = `/api/avatar/${session.user.id}?t=${timestamp}`;
-
-        await User.findByIdAndUpdate(
-            session.user.id,
-            {
-                $set: {
-                    profilePictureData: base64,
-                    image: imageUrl,
-                    profilePictureUpdatedAt: new Date()
-                }
-            },
-            { new: true }
-        );
-
-        revalidatePath("/settings");
-        revalidatePath("/dashboard");
-
-        return { success: true, imageUrl };
-    } catch (error) {
-        console.error("Failed to update profile picture:", error);
-        return { error: "Failed to update profile picture" };
-    }
-}
-
-export async function updatePreferences(data: UpdatePreferencesData) {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
-    try {
-        // Construct dot notation update to avoid overwriting the whole object
-        const update: Record<string, any> = {};
-        if (data.emailNotifications !== undefined) update["preferences.emailNotifications"] = data.emailNotifications;
-        if (data.weeklySummary !== undefined) update["preferences.weeklySummary"] = data.weeklySummary;
-        if (data.defaultBoardView !== undefined) update["preferences.defaultBoardView"] = data.defaultBoardView;
-        if (data.theme !== undefined) update["preferences.theme"] = data.theme;
-        if (data.accentColor !== undefined) update["preferences.accentColor"] = data.accentColor;
-
-        const updatedUser = await User.findByIdAndUpdate(
-            session.user.id,
-            { $set: update },
-            { new: true, lean: true } // Use lean() to get plain object
-        ).select("-password");
-
-        revalidatePath("/settings");
-        
-        // Return success without user data to avoid serialization issues
-        // Client components will refetch user data through useUserPreferences hook
-        return { success: true };
-    } catch (error) {
-        console.error("Failed to update preferences:", error);
-        return { error: "Failed to update preferences" };
-    }
-}
-
-export async function deleteAccount() {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    const mongooseInstance = await connectDB();
-    const db = mongooseInstance.connection.db;
-
-    if (!db) {
-        console.error("Database connection not available");
-        return { error: "Database connection failed" };
-    }
-
-    try {
-        console.log(`Starting comprehensive account deletion for user: ${session.user.id}`);
-
-        // Get user email first for verification cleanup
-        const user = await User.findById(session.user.id).select("email");
-        const userEmail = user?.email;
-
-        // 1. Delete all Job Applications owned by user
-        const jobAppResult = await JobApplication.deleteMany({ userId: session.user.id });
-        console.log(`Deleted ${jobAppResult.deletedCount} job applications`);
-
-        // 2. Delete all Boards and their Columns owned by user
-        const userBoards = await Board.find({ userId: session.user.id }).select("_id");
-        const boardIds = userBoards.map(b => b._id);
-
-        if (boardIds.length > 0) {
-            const columnResult = await Column.deleteMany({ boardId: { $in: boardIds } });
-            console.log(`Deleted ${columnResult.deletedCount} columns`);
-        }
-
-        const boardResult = await Board.deleteMany({ userId: session.user.id });
-        console.log(`Deleted ${boardResult.deletedCount} boards`);
-
-        // 3. Delete our custom session tracking records
-        const sessionResult = await Session.deleteMany({ userId: session.user.id });
-        console.log(`Deleted ${sessionResult.deletedCount} session tracking records`);
-
-        // 4. Delete ALL Better Auth related collections (comprehensive cleanup)
-        try {
-            // Better Auth sessions
-            const betterAuthSessions = await db.collection("session").deleteMany({ userId: session.user.id });
-            console.log(`Deleted ${betterAuthSessions.deletedCount} Better Auth sessions`);
-            
-            // Better Auth accounts (OAuth connections like Google, GitHub) - check both singular and plural
-            const betterAuthAccounts1 = await db.collection("account").deleteMany({ userId: session.user.id });
-            console.log(`Deleted ${betterAuthAccounts1.deletedCount} Better Auth accounts (singular collection)`);
-            
-            const betterAuthAccounts2 = await db.collection("accounts").deleteMany({ userId: session.user.id });
-            console.log(`Deleted ${betterAuthAccounts2.deletedCount} Better Auth accounts (plural collection)`);
-            
-            // Better Auth verification records - these don't always have userId, need multiple approaches
-            if (userEmail) {
-                // Try to delete verification records that might be linked to this user's email
-                const verificationResult1 = await db.collection("verification").deleteMany({ 
-                    $or: [
-                        { userId: session.user.id },
-                        { identifier: { $regex: userEmail, $options: 'i' } },
-                        { value: { $regex: userEmail, $options: 'i' } }
-                    ]
-                });
-                console.log(`Deleted ${verificationResult1.deletedCount} verification records (by email/userId)`);
-            }
-            
-            // Also try to delete verification records by userId only
-            const verificationResult2 = await db.collection("verification").deleteMany({ userId: session.user.id });
-            console.log(`Deleted ${verificationResult2.deletedCount} verification records (by userId only)`);
-            
-            // Better Auth two-factor authentication records
-            const twoFactorResult = await db.collection("twoFactor").deleteMany({ userId: session.user.id });
-            console.log(`Deleted ${twoFactorResult.deletedCount} two-factor authentication records`);
-            
-            // Better Auth backup codes
-            const backupCodesResult = await db.collection("backupCode").deleteMany({ userId: session.user.id });
-            console.log(`Deleted ${backupCodesResult.deletedCount} backup codes`);
-            
-            // Better Auth passkey records (if using passkeys)
-            const passkeyResult = await db.collection("passkey").deleteMany({ userId: session.user.id });
-            console.log(`Deleted ${passkeyResult.deletedCount} passkey records`);
-            
-            // Better Auth trusted device records
-            const trustedDeviceResult = await db.collection("trustedDevice").deleteMany({ userId: session.user.id });
-            console.log(`Deleted ${trustedDeviceResult.deletedCount} trusted device records`);
-            
-            // Better Auth rate limit records (cleanup user-specific rate limits)
-            if (userEmail) {
-                const rateLimitResult = await db.collection("rateLimit").deleteMany({ 
-                    $or: [
-                        { userId: session.user.id },
-                        { identifier: userEmail }
-                    ]
-                });
-                console.log(`Deleted ${rateLimitResult.deletedCount} rate limit records`);
-            }
-            
-        } catch (dbError) {
-            console.error("Error deleting Better Auth collections:", dbError);
-            // Continue with deletion even if some collections fail
-        }
-
-        // 5. Delete User record (this should be last)
-        const userResult = await User.findByIdAndDelete(session.user.id);
-        console.log(`Deleted user record: ${userResult ? 'success' : 'failed'}`);
-
-        console.log(`Comprehensive account deletion completed for user: ${session.user.id}`);
-        return { success: true };
-    } catch (error) {
-        console.error("Failed to delete account:", error);
-        return { error: "Failed to delete account" };
-    }
-}
-
-export async function changePassword(currentPassword: string, newPassword: string) {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
-    try {
-        const result = await auth.api.changePassword({
-            body: {
-                currentPassword,
-                newPassword,
-                revokeOtherSessions: true,
-            },
-            headers: await headers(),
-        });
-
-        // Better Auth returns user object on success
-        if (result.user) {
-            return { success: true };
-        }
-
-        return { error: "Failed to update password" };
-    } catch (error: any) {
-        console.error("Password change error:", error);
-        
-        // Handle common Better Auth error messages
-        const errorMessage = error.message || error.toString();
-        
-        if (errorMessage.includes("Invalid password") || errorMessage.includes("incorrect")) {
-            return { error: "Current password is incorrect" };
-        }
-        
-        if (errorMessage.includes("weak") || errorMessage.includes("strength")) {
-            return { error: "New password is too weak" };
-        }
-        
-        if (errorMessage.includes("same") || errorMessage.includes("identical")) {
-            return { error: "New password must be different from current password" };
-        }
-        
-        return { error: "Failed to update password. Please try again." };
-    }
+    defaultBoardView?: 'kanban' | 'list';
+  };
 }
 
 export async function getUser() {
-    const session = await getSession();
-    if (!session?.user) return null;
+  try {
+    const sessionResult = await AuthService.validateServerSession();
+    if (!sessionResult.user) {
+      return null;
+    }
 
-    await connectDB();
+    const supabase = await createSupabaseServerClient();
+    const { data: profile, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('id', sessionResult.user.id)
+      .single();
 
-    // Lean() for performance since we just need the data object
-    const user = await User.findById(session.user.id).select("-password").lean();
+    if (error) {
+      console.error('Error fetching user profile:', error);
+      return null;
+    }
 
-    if (!user) return null;
+    return profile;
+  } catch (error) {
+    console.error('Error in getUser:', error);
+    return null;
+  }
+}
 
-    return JSON.parse(JSON.stringify(user));
+export async function updateProfile(data: UpdateProfileData) {
+  try {
+    const sessionResult = await AuthService.validateServerSession();
+    if (!sessionResult.user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.profilePictureData !== undefined) {
+      updateData.profile_picture_data = data.profilePictureData;
+      updateData.profile_picture_updated_at = data.profilePictureData ? new Date().toISOString() : null;
+    }
+
+    const { error } = await ((supabase as any)
+      .from('user_profiles')
+      .update(updateData)
+      .eq('id', sessionResult.user.id));
+
+    if (error) {
+      console.error('Error updating profile:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/settings');
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateProfile:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  }
+}
+
+export async function updatePreferences(data: UpdatePreferencesData) {
+  try {
+    const sessionResult = await AuthService.validateServerSession();
+    if (!sessionResult.user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (data.theme !== undefined) updateData.theme = data.theme;
+    if (data.accentColor !== undefined) updateData.accent_color = data.accentColor;
+    if (data.notifications !== undefined) {
+      // Get current notifications and merge
+      const { data: currentProfile } = await supabase
+        .from('user_profiles')
+        .select('notifications')
+        .eq('id', sessionResult.user.id)
+        .single();
+
+      const currentNotifications = ((currentProfile as any)?.notifications as any) || {};
+      updateData.notifications = {
+        ...currentNotifications,
+        ...data.notifications
+      };
+    }
+
+    const { error } = await ((supabase as any)
+      .from('user_profiles')
+      .update(updateData)
+      .eq('id', sessionResult.user.id));
+
+    if (error) {
+      console.error('Error updating preferences:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/settings');
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updatePreferences:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  }
+}
+
+export async function updateProfilePicture(imageData: string) {
+  try {
+    const sessionResult = await AuthService.validateServerSession();
+    if (!sessionResult.user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const { error } = await (supabase as any)
+      .from('user_profiles')
+      .update({
+        profile_picture_data: imageData,
+        profile_picture_updated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as any)
+      .eq('id', sessionResult.user.id);
+
+    if (error) {
+      console.error('Error updating profile picture:', error);
+      return { success: false, error: error.message };
+    }
+
+    revalidatePath('/settings');
+    return { success: true };
+  } catch (error) {
+    console.error('Error in updateProfilePicture:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  }
+}
+
+export async function changePassword(currentPassword: string, newPassword: string) {
+  try {
+    const sessionResult = await AuthService.validateServerSession();
+    if (!sessionResult.user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    // First verify current password by attempting to sign in
+    const authService = new AuthService();
+    const signInResult = await authService.signIn({
+      email: sessionResult.user.email!,
+      password: currentPassword
+    });
+
+    if (!signInResult.success) {
+      return { success: false, error: "Current password is incorrect" };
+    }
+
+    // Update password
+    const updateResult = await authService.updatePassword(newPassword);
+    
+    if (!updateResult.success) {
+      return { success: false, error: updateResult.error?.message || "Failed to update password" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error in changePassword:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  }
+}
+
+export async function deleteAccount() {
+  try {
+    const sessionResult = await AuthService.validateServerSession();
+    if (!sessionResult.user) {
+      return { success: false, error: "Not authenticated" };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const userId = sessionResult.user.id;
+    
+    console.log('Starting account deletion for user:', userId);
+    
+    // Delete in the correct order to avoid foreign key constraint violations
+    // 1. Delete job applications first
+    const { error: jobAppsError } = await supabase
+      .from('job_applications')
+      .delete()
+      .eq('user_id', userId);
+
+    if (jobAppsError) {
+      console.error('Error deleting job applications:', jobAppsError);
+      return { success: false, error: `Failed to delete job applications: ${jobAppsError.message}` };
+    }
+    console.log('✅ Job applications deleted');
+
+    // 2. Delete columns (should cascade from boards, but let's be explicit)
+    // First get the board IDs for this user
+    const { data: userBoards } = await supabase
+      .from('boards')
+      .select('id')
+      .eq('user_id', userId);
+
+    if (userBoards && userBoards.length > 0) {
+      const boardIds = userBoards.map((board: any) => board.id);
+      const { error: columnsError } = await supabase
+        .from('columns')
+        .delete()
+        .in('board_id', boardIds);
+
+      if (columnsError) {
+        console.error('Error deleting columns:', columnsError);
+        return { success: false, error: `Failed to delete columns: ${columnsError.message}` };
+      }
+      console.log('✅ Columns deleted');
+    }
+
+    // 3. Delete boards
+    const { error: boardsError } = await supabase
+      .from('boards')
+      .delete()
+      .eq('user_id', userId);
+
+    if (boardsError) {
+      console.error('Error deleting boards:', boardsError);
+      return { success: false, error: `Failed to delete boards: ${boardsError.message}` };
+    }
+    console.log('✅ Boards deleted');
+
+    // 4. Delete sessions
+    const { error: sessionsError } = await supabase
+      .from('sessions')
+      .delete()
+      .eq('user_id', userId);
+
+    if (sessionsError) {
+      console.error('Error deleting sessions:', sessionsError);
+      return { success: false, error: `Failed to delete sessions: ${sessionsError.message}` };
+    }
+    console.log('✅ Sessions deleted');
+
+    // 5. Delete user profile
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (profileError) {
+      console.error('Error deleting user profile:', profileError);
+      return { success: false, error: `Failed to delete user profile: ${profileError.message}` };
+    }
+    console.log('✅ User profile deleted');
+
+    // 6. Delete the user from Supabase Auth using admin API
+    try {
+      const supabaseAdmin = await createSupabaseServiceClient();
+      const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      
+      if (authDeleteError) {
+        console.error('Error deleting user from auth:', authDeleteError);
+        // Don't fail the operation if auth deletion fails, profile is already deleted
+        console.log('⚠️ Auth user deletion failed, but continuing with sign out');
+      } else {
+        console.log('✅ Auth user deleted');
+      }
+    } catch (adminError) {
+      console.error('Error with admin deletion:', adminError);
+      // Continue with sign out even if admin deletion fails
+      console.log('⚠️ Auth user deletion failed, but continuing with sign out');
+    }
+
+    // 7. Sign out the user
+    const authService = new AuthService();
+    await authService.signOut();
+    console.log('✅ User signed out');
+
+    console.log('🎉 Account deletion completed successfully');
+    return { success: true };
+  } catch (error) {
+    console.error('Error in deleteAccount:', error);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : "Unknown error" 
+    };
+  }
 }

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Loader2, ShieldOff, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
-import { disableTwoFactor } from "@/lib/actions/two-factor";
+import { disable2FA } from "@/lib/actions/two-factor";
 
 interface TwoFactorDisableProps {
     isOpen: boolean;
@@ -28,7 +28,7 @@ export function TwoFactorDisable({ isOpen, onClose, onComplete }: TwoFactorDisab
 
         setLoading(true);
         try {
-            const result = await disableTwoFactor(password);
+            const result = await disable2FA();
             if (result.error) {
                 toast.error(result.error);
                 return;

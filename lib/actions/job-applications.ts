@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getSession } from "../auth/auth";
-import connectDB from "../db";
-import { Board, Column, JobApplication } from "../models";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
+import { createSupabaseServerClient } from "@/lib/supabase/utils";
 
 interface JobApplicationData {
   company: string;
@@ -19,13 +18,13 @@ interface JobApplicationData {
 }
 
 export async function createJobApplication(data: JobApplicationData) {
-  const session = await getSession();
+  const sessionResult = await AuthService.validateServerSession();
 
-  if (!session?.user) {
+  if (!sessionResult.user) {
     return { error: "Unauthorized" };
   }
 
-  await connectDB();
+  const supabase = await createSupabaseServerClient();
 
   const {
     company,
@@ -45,54 +44,66 @@ export async function createJobApplication(data: JobApplicationData) {
   }
 
   // Verify board ownership
-  const board = await Board.findOne({
-    _id: boardId,
-    userId: session.user.id,
-  });
+  const { data: board, error: boardError } = await supabase
+    .from('boards')
+    .select('id')
+    .eq('id', boardId)
+    .eq('user_id', sessionResult.user.id)
+    .single();
 
-  if (!board) {
+  if (boardError || !board) {
     return { error: "Board not found" };
   }
 
   // Verify column belongs to board
+  const { data: column, error: columnError } = await supabase
+    .from('columns')
+    .select('id')
+    .eq('id', columnId)
+    .eq('board_id', boardId)
+    .single();
 
-  const column = await Column.findOne({
-    _id: columnId,
-    boardId: boardId,
-  });
-
-  if (!column) {
+  if (columnError || !column) {
     return { error: "Column not found" };
   }
 
-  const maxOrder = (await JobApplication.findOne({ columnId })
-    .sort({ order: -1 })
-    .select("order")
-    .lean()) as { order: number } | null;
+  // Get max order for new job application
+  const { data: maxOrderResult } = await supabase
+    .from('job_applications')
+    .select('order_index')
+    .eq('column_id', columnId)
+    .order('order_index', { ascending: false })
+    .limit(1);
 
-  const jobApplication = await JobApplication.create({
-    company,
-    position,
-    location,
-    notes,
-    salary,
-    jobUrl,
-    columnId,
-    boardId,
-    userId: session.user.id,
-    tags: tags || [],
-    description,
-    status: "applied",
-    order: maxOrder ? maxOrder.order + 1 : 0,
-  });
+  const maxOrder = (maxOrderResult as any)?.[0]?.order_index || 0;
 
-  await Column.findByIdAndUpdate(columnId, {
-    $push: { jobApplications: jobApplication._id },
-  });
+  const { data: jobApplication, error } = await (supabase
+    .from('job_applications')
+    .insert({
+      company,
+      position,
+      location,
+      notes,
+      salary,
+      job_url: jobUrl,
+      column_id: columnId,
+      board_id: boardId,
+      user_id: sessionResult.user.id,
+      tags: tags || [],
+      description,
+      status: 'applied',
+      order_index: maxOrder + 1,
+    } as any)
+    .select()
+    .single() as any);
+
+  if (error) {
+    return { error: error.message };
+  }
 
   revalidatePath("/dashboard");
 
-  return { data: JSON.parse(JSON.stringify(jobApplication)) };
+  return { data: jobApplication };
 }
 
 export async function updateJobApplication(
@@ -110,153 +121,96 @@ export async function updateJobApplication(
     description?: string;
   }
 ) {
-  const session = await getSession();
+  const sessionResult = await AuthService.validateServerSession();
 
-  if (!session?.user) {
+  if (!sessionResult.user) {
     return { error: "Unauthorized" };
   }
 
-  const jobApplication = await JobApplication.findById(id);
+  const supabase = await createSupabaseServerClient();
 
-  if (!jobApplication) {
+  // Get current job application
+  const { data: jobApplication, error: fetchError } = await supabase
+    .from('job_applications')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', sessionResult.user.id)
+    .single();
+
+  if (fetchError || !jobApplication) {
     return { error: "Job application not found" };
   }
 
-  if (jobApplication.userId !== session.user.id) {
-    return { error: "Unauthorized" };
+  const { columnId, order, jobUrl, ...otherUpdates } = updates;
+
+  const updatesToApply: any = {
+    ...otherUpdates,
+    updated_at: new Date().toISOString()
+  };
+
+  if (jobUrl !== undefined) {
+    updatesToApply.job_url = jobUrl;
   }
 
-  const { columnId, order, ...otherUpdates } = updates;
+  const currentColumnId = (jobApplication as any).column_id;
+  const newColumnId = columnId;
 
-  const updatesToApply: Partial<{
-    company: string;
-    position: string;
-    location: string;
-    notes: string;
-    salary: string;
-    jobUrl: string;
-    columnId: string;
-    order: number;
-    tags: string[];
-    description: string;
-  }> = otherUpdates;
-
-  const currentColumnId = jobApplication.columnId.toString();
-  const newColumnId = columnId?.toString();
-
-  const isMovingToDifferentColumn =
-    newColumnId && newColumnId !== currentColumnId;
+  const isMovingToDifferentColumn = newColumnId && newColumnId !== currentColumnId;
 
   if (isMovingToDifferentColumn) {
-    await Column.findByIdAndUpdate(currentColumnId, {
-      $pull: { jobApplications: id },
-    });
+    // Handle column change
+    updatesToApply.column_id = newColumnId;
+    
+    // Get max order in target column
+    const { data: maxOrderResult } = await supabase
+      .from('job_applications')
+      .select('order_index')
+      .eq('column_id', newColumnId)
+      .order('order_index', { ascending: false })
+      .limit(1);
 
-    const jobsInTargetColumn = await JobApplication.find({
-      columnId: newColumnId,
-      _id: { $ne: id },
-    })
-      .sort({ order: 1 })
-      .lean();
-
-    let newOrderValue: number;
-
-    if (order !== undefined && order !== null) {
-      newOrderValue = order * 100;
-
-      const jobsThatNeedToShift = jobsInTargetColumn.slice(order);
-      for (const job of jobsThatNeedToShift) {
-        await JobApplication.findByIdAndUpdate(job._id, {
-          $set: { order: job.order + 100 },
-        });
-      }
-    } else {
-      if (jobsInTargetColumn.length > 0) {
-        const lastJobOrder =
-          jobsInTargetColumn[jobsInTargetColumn.length - 1].order || 0;
-        newOrderValue = lastJobOrder + 100;
-      } else {
-        newOrderValue = 0;
-      }
-    }
-
-    updatesToApply.columnId = newColumnId;
-    updatesToApply.order = newOrderValue;
-
-    await Column.findByIdAndUpdate(newColumnId, {
-      $push: { jobApplications: id },
-    });
-  } else if (order !== undefined && order !== null) {
-    const otherJobsInColumn = await JobApplication.find({
-      columnId: currentColumnId,
-      _id: { $ne: id },
-    })
-      .sort({ order: 1 })
-      .lean();
-
-    const currentJobOrder = jobApplication.order || 0;
-    const currentPositionIndex = otherJobsInColumn.findIndex(
-      (job) => job.order > currentJobOrder
-    );
-    const oldPositionindex =
-      currentPositionIndex === -1
-        ? otherJobsInColumn.length
-        : currentPositionIndex;
-
-    const newOrderValue = order * 100;
-
-    if (order < oldPositionindex) {
-      const jobsToShiftDown = otherJobsInColumn.slice(order, oldPositionindex);
-
-      for (const job of jobsToShiftDown) {
-        await JobApplication.findByIdAndUpdate(job._id, {
-          $set: { order: job.order + 100 },
-        });
-      }
-    } else if (order > oldPositionindex) {
-      const jobsToShiftUp = otherJobsInColumn.slice(oldPositionindex, order);
-      for (const job of jobsToShiftUp) {
-        const newOrder = Math.max(0, job.order - 100);
-        await JobApplication.findByIdAndUpdate(job._id, {
-          $set: { order: newOrder },
-        });
-      }
-    }
-
-    updatesToApply.order = newOrderValue;
+    const maxOrder = (maxOrderResult as any)?.[0]?.order_index || 0;
+    updatesToApply.order_index = order !== undefined ? order : maxOrder + 1;
+  } else if (order !== undefined) {
+    updatesToApply.order_index = order;
   }
 
-  const updated = await JobApplication.findByIdAndUpdate(id, updatesToApply, {
-    new: true,
-  });
+  const { data: updated, error } = await ((supabase as any)
+    .from('job_applications')
+    .update(updatesToApply)
+    .eq('id', id)
+    .select()
+    .single());
+
+  if (error) {
+    return { error: error.message };
+  }
 
   revalidatePath("/dashboard");
 
-  return { data: JSON.parse(JSON.stringify(updated)) };
+  return { data: updated };
 }
 
 export async function deleteJobApplication(id: string) {
-  const session = await getSession();
+  const sessionResult = await AuthService.validateServerSession();
 
-  if (!session?.user) {
+  if (!sessionResult.user) {
     return { error: "Unauthorized" };
   }
 
-  const jobApplication = await JobApplication.findById(id);
+  const supabase = await createSupabaseServerClient();
 
-  if (!jobApplication) {
-    return { error: "Job application not found" };
+  // Verify ownership and delete
+  const { error } = await supabase
+    .from('job_applications')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', sessionResult.user.id);
+
+  if (error) {
+    return { error: error.message };
   }
 
-  if (jobApplication.userId !== session.user.id) {
-    return { error: "Unauthorized" };
-  }
-
-  await Column.findByIdAndUpdate(jobApplication.columnId, {
-    $pull: { jobApplications: id },
-  });
-
-  await JobApplication.deleteOne({ _id: id });
   revalidatePath("/dashboard");
 
   return { success: true };

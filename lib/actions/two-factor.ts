@@ -1,290 +1,287 @@
 "use server";
 
-import { generateSecret, generateURI, verify } from 'otplib';
-import QRCode from 'qrcode';
-import { getSession } from "@/lib/auth/auth";
-import connectDB from "@/lib/db";
-import User from "@/lib/models/user";
-import { encryptSecret, decryptSecret, hashBackupCode, generateBackupCodes } from "@/lib/crypto";
+import { mfaService, MFAService } from "@/lib/auth/mfa-service";
+import { authService } from "@/lib/auth/supabase-auth-service";
 import { revalidatePath } from "next/cache";
 
-export async function initiateTwoFactor() {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
+/**
+ * Server action to enroll in MFA
+ */
+export async function enrollMFA(friendlyName?: string) {
     try {
-        // Generate TOTP secret
-        const secret = generateSecret();
-        const encryptedSecret = encryptSecret(secret);
+        const sessionResult = await authService.getSession();
+        if (!sessionResult.success || !sessionResult.data) {
+            return { success: false, error: "Not authenticated" };
+        }
 
-        // Store encrypted secret temporarily (not enabled yet)
-        await User.findByIdAndUpdate(session.user.id, {
-            $set: { twoFactorSecret: encryptedSecret }
-        });
-
-        // Generate QR code URI
-        const otpauth = generateURI({
-            issuer: 'Stride Job Tracker',
-            label: session.user.email,
-            secret: secret
-        });
-
-        const qrCodeDataUrl = await QRCode.toDataURL(otpauth);
-
-        return {
-            success: true,
-            qrCode: qrCodeDataUrl,
-            secret: secret, // For manual entry
-            backupUrl: otpauth
+        const result = await mfaService.enrollMFA('totp', friendlyName || 'Authenticator App');
+        return result;
+    } catch (error) {
+        console.error('Failed to enroll MFA:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to enroll MFA" 
         };
-    } catch (error) {
-        console.error("Failed to initiate 2FA:", error);
-        return { error: "Failed to initiate 2FA setup" };
     }
 }
 
-export async function verifyTwoFactorSetup(token: string) {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
+/**
+ * Server action to verify MFA enrollment
+ */
+export async function verifyMFAEnrollment(factorId: string, code: string) {
     try {
-        const user = await User.findById(session.user.id);
-        if (!user?.twoFactorSecret) {
-            return { error: "No 2FA setup in progress" };
+        const sessionResult = await authService.getSession();
+        if (!sessionResult.success || !sessionResult.data) {
+            return { success: false, error: "Not authenticated" };
         }
 
-        // Decrypt secret and verify token
-        const secret = decryptSecret(user.twoFactorSecret);
-        const isValid = verify({ token, secret });
-
-        if (!isValid) {
-            return { error: "Invalid verification code" };
+        const result = await mfaService.verifyEnrollment(factorId, code);
+        
+        if (result.success) {
+            // Update user profile to mark 2FA as enabled
+            await mfaService.updateUserMFAStatus(sessionResult.data.user!.id, true);
+            revalidatePath('/settings');
         }
-
-        // Generate backup codes
-        const backupCodes = generateBackupCodes();
-        const hashedBackupCodes = backupCodes.map(code => hashBackupCode(code));
-
-        // Enable 2FA
-        await User.findByIdAndUpdate(session.user.id, {
-            $set: {
-                twoFactorEnabled: true,
-                twoFactorVerifiedAt: new Date(),
-                twoFactorBackupCodes: hashedBackupCodes
-            }
-        });
-
-        revalidatePath("/settings");
-
-        return {
-            success: true,
-            backupCodes: backupCodes // Return raw codes for user to save
+        
+        return result;
+    } catch (error) {
+        console.error('Failed to verify MFA enrollment:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to verify MFA enrollment" 
         };
-    } catch (error) {
-        console.error("Failed to verify 2FA setup:", error);
-        return { error: "Failed to verify 2FA setup" };
     }
 }
 
-export async function verifyTwoFactorLogin(token: string) {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
+/**
+ * Server action to list MFA factors
+ */
+export async function listMFAFactors() {
     try {
-        const user = await User.findById(session.user.id);
-        if (!user?.twoFactorEnabled || !user.twoFactorSecret) {
-            return { error: "2FA not enabled" };
+        const sessionResult = await authService.getSession();
+        if (!sessionResult.success || !sessionResult.data) {
+            return { success: false, error: "Not authenticated" };
         }
 
-        // Check if it's a backup code
-        if (token.length === 8 && /^[A-Z0-9]+$/.test(token)) {
-            const hashedToken = hashBackupCode(token);
-            const codeIndex = user.twoFactorBackupCodes?.indexOf(hashedToken);
-            
-            if (codeIndex !== undefined && codeIndex !== -1) {
-                // Remove used backup code
-                const updatedCodes = [...(user.twoFactorBackupCodes || [])];
-                updatedCodes.splice(codeIndex, 1);
-                
-                await User.findByIdAndUpdate(session.user.id, {
-                    $set: {
-                        twoFactorBackupCodes: updatedCodes,
-                        lastTwoFactorAt: new Date()
-                    }
-                });
-
-                return { success: true, method: "backup" };
-            }
-        }
-
-        // Verify TOTP token
-        const secret = decryptSecret(user.twoFactorSecret);
-        const isValid = verify({ token, secret });
-
-        if (!isValid) {
-            return { error: "Invalid verification code" };
-        }
-
-        // Update last 2FA time
-        await User.findByIdAndUpdate(session.user.id, {
-            $set: { lastTwoFactorAt: new Date() }
-        });
-
-        return { success: true, method: "totp" };
+        const result = await mfaService.listFactors();
+        return result;
     } catch (error) {
-        console.error("Failed to verify 2FA login:", error);
-        return { error: "Failed to verify 2FA code" };
+        console.error('Failed to list MFA factors:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to list MFA factors" 
+        };
     }
 }
 
-export async function disableTwoFactor(password: string) {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
+/**
+ * Server action to unenroll MFA factor
+ */
+export async function unenrollMFAFactor(factorId: string) {
     try {
-        // Verify password using Better Auth
-        const { authClient } = await import("@/lib/auth/auth-client");
-        const passwordCheck = await authClient.signIn.email({
-            email: session.user.email,
-            password: password
-        });
-
-        if (passwordCheck.error) {
-            return { error: "Invalid password" };
+        const sessionResult = await authService.getSession();
+        if (!sessionResult.success || !sessionResult.data) {
+            return { success: false, error: "Not authenticated" };
         }
 
-        // Disable 2FA
-        await User.findByIdAndUpdate(session.user.id, {
-            $unset: {
-                twoFactorSecret: "",
-                twoFactorBackupCodes: "",
-                twoFactorVerifiedAt: "",
-                lastTwoFactorAt: ""
-            },
-            $set: {
-                twoFactorEnabled: false
+        const result = await mfaService.unenrollFactor(factorId);
+        
+        if (result.success) {
+            // Check if any factors remain
+            const factorsResult = await mfaService.listFactors();
+            if (factorsResult.success && (!factorsResult.data || factorsResult.data.length === 0)) {
+                // No factors remain, disable 2FA in profile
+                await mfaService.updateUserMFAStatus(sessionResult.data.user!.id, false);
             }
-        });
+            revalidatePath('/settings');
+        }
+        
+        return result;
+    } catch (error) {
+        console.error('Failed to unenroll MFA factor:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to unenroll MFA factor" 
+        };
+    }
+}
 
-        revalidatePath("/settings");
+/**
+ * Server action to generate backup codes
+ */
+export async function generateBackupCodes() {
+    try {
+        const sessionResult = await authService.getSession();
+        if (!sessionResult.success || !sessionResult.data) {
+            return { success: false, error: "Not authenticated" };
+        }
 
+        const result = await mfaService.generateBackupCodes(sessionResult.data.user!.id);
+        return result;
+    } catch (error) {
+        console.error('Failed to generate backup codes:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to generate backup codes" 
+        };
+    }
+}
+
+/**
+ * Server action to verify backup code
+ */
+export async function verifyBackupCode(code: string) {
+    try {
+        const sessionResult = await authService.getSession();
+        if (!sessionResult.success || !sessionResult.data) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        const result = await mfaService.verifyBackupCode(sessionResult.data.user!.id, code);
+        return result;
+    } catch (error) {
+        console.error('Failed to verify backup code:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to verify backup code" 
+        };
+    }
+}
+
+/**
+ * Server action to create MFA challenge
+ */
+export async function createMFAChallenge(factorId: string) {
+    try {
+        const result = await mfaService.createChallenge(factorId);
+        return result;
+    } catch (error) {
+        console.error('Failed to create MFA challenge:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to create MFA challenge" 
+        };
+    }
+}
+
+/**
+ * Server action to verify MFA challenge
+ */
+export async function verifyMFAChallenge(factorId: string, challengeId: string, code: string) {
+    try {
+        const result = await mfaService.verifyChallenge(factorId, challengeId, code);
+        return result;
+    } catch (error) {
+        console.error('Failed to verify MFA challenge:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to verify MFA challenge" 
+        };
+    }
+}
+
+/**
+ * Server action to disable 2FA completely
+ */
+export async function disable2FA() {
+    try {
+        const sessionResult = await authService.getSession();
+        if (!sessionResult.success || !sessionResult.data) {
+            return { success: false, error: "Not authenticated" };
+        }
+
+        const userId = sessionResult.data.user!.id;
+
+        // Get all factors
+        const factorsResult = await mfaService.listFactors();
+        if (!factorsResult.success) {
+            return { success: false, error: "Failed to list MFA factors" };
+        }
+
+        // Unenroll all factors
+        const factors = factorsResult.data || [];
+        for (const factor of factors) {
+            await mfaService.unenrollFactor(factor.id);
+        }
+
+        // Update user profile
+        await mfaService.updateUserMFAStatus(userId, false);
+
+        // Clear backup codes
+        await ((mfaService.client as any)
+            .from('user_profiles')
+            .update({
+                two_factor_backup_codes: [],
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', userId));
+
+        revalidatePath('/settings');
         return { success: true };
     } catch (error) {
-        console.error("Failed to disable 2FA:", error);
-        return { error: "Failed to disable 2FA" };
+        console.error('Failed to disable 2FA:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to disable 2FA" 
+        };
     }
 }
 
-export async function regenerateBackupCodes(token: string) {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
+/**
+ * Server action to get user's 2FA status
+ */
+export async function get2FAStatus() {
     try {
-        const user = await User.findById(session.user.id);
-        if (!user?.twoFactorEnabled || !user.twoFactorSecret) {
-            return { error: "2FA not enabled" };
+        const sessionResult = await authService.getSession();
+        if (!sessionResult.success || !sessionResult.data) {
+            return { success: false, error: "Not authenticated" };
         }
 
-        // Verify current 2FA token
-        const secret = decryptSecret(user.twoFactorSecret);
-        const isValid = verify({ token, secret });
+        const userId = sessionResult.data.user!.id;
 
-        if (!isValid) {
-            return { error: "Invalid verification code" };
+        // Get user profile
+        const { data: profile, error: profileError } = await (mfaService.client
+            .from('user_profiles')
+            .select('two_factor_enabled, two_factor_backup_codes')
+            .eq('id', userId)
+            .single() as any);
+
+        if (profileError) {
+            return { success: false, error: "Failed to get user profile" };
         }
 
-        // Generate new backup codes
-        const backupCodes = generateBackupCodes();
-        const hashedBackupCodes = backupCodes.map(code => hashBackupCode(code));
+        // Get MFA factors
+        const factorsResult = await mfaService.listFactors();
+        if (!factorsResult.success) {
+            return { success: false, error: "Failed to list MFA factors" };
+        }
 
-        await User.findByIdAndUpdate(session.user.id, {
-            $set: { twoFactorBackupCodes: hashedBackupCodes }
-        });
+        const factors = factorsResult.data || [];
+        const hasBackupCodes = ((profile as any)?.two_factor_backup_codes || []).length > 0;
 
         return {
             success: true,
-            backupCodes: backupCodes
+            data: {
+                enabled: (profile as any)?.two_factor_enabled || false,
+                factors,
+                hasBackupCodes,
+                backupCodesCount: ((profile as any)?.two_factor_backup_codes || []).length
+            }
         };
     } catch (error) {
-        console.error("Failed to regenerate backup codes:", error);
-        return { error: "Failed to regenerate backup codes" };
+        console.error('Failed to get 2FA status:', error);
+        return { 
+            success: false, 
+            error: error instanceof Error ? error.message : "Failed to get 2FA status" 
+        };
     }
 }
 
-export async function logoutAllSessions() {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    try {
-        await connectDB();
-        
-        // Direct database approach - remove all sessions for this user
-        const mongoose = await import("mongoose");
-        const db = mongoose.connection.db;
-        
-        if (!db) {
-            throw new Error("Database connection not available");
-        }
-        
-        // Better Auth typically stores sessions in a 'session' collection
-        const sessionsCollection = db.collection('session');
-        
-        // Remove all sessions for this user
-        const deleteResult = await sessionsCollection.deleteMany({
-            userId: session.user.id
-        });
-        
-        console.log(`Deleted ${deleteResult.deletedCount} sessions for user ${session.user.id}`);
-        
-        // Also try the Better Auth API as backup
-        try {
-            const { auth } = await import("@/lib/auth/auth");
-            const { headers } = await import("next/headers");
-            
-            await auth.api.revokeOtherSessions({
-                headers: await headers()
-            });
-        } catch (apiError) {
-            console.log("Better Auth API failed, but database cleanup succeeded:", apiError);
-        }
-
-        return { success: true, deletedSessions: deleteResult.deletedCount };
-    } catch (error) {
-        console.error("Failed to revoke sessions:", error);
-        return { error: "Failed to revoke sessions on server" };
-    }
-}
-
-export async function getTwoFactorStatus() {
-    const session = await getSession();
-    if (!session?.user) return { error: "Unauthorized" };
-
-    await connectDB();
-
-    try {
-        const user = await User.findById(session.user.id).select(
-            'twoFactorEnabled twoFactorVerifiedAt lastTwoFactorAt twoFactorBackupCodes'
-        );
-
-        return {
-            success: true,
-            enabled: user?.twoFactorEnabled || false,
-            verifiedAt: user?.twoFactorVerifiedAt,
-            lastUsedAt: user?.lastTwoFactorAt,
-            backupCodesCount: user?.twoFactorBackupCodes?.length || 0
-        };
-    } catch (error) {
-        console.error("Failed to get 2FA status:", error);
-        return { error: "Failed to get 2FA status" };
-    }
+/**
+ * Server action to verify two-factor login (stub for future implementation)
+ */
+export async function verifyTwoFactorLogin(code: string) {
+    // This is a stub function for the TwoFactorChallenge component
+    // In a full implementation, this would handle 2FA verification during login
+    return { success: false, error: "Two-factor login verification not yet implemented" };
 }
