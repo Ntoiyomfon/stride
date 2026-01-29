@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
             const serviceClient = await createSupabaseServiceClient();
             
             // Check if a session exists for this device ID
-            const { data: existingSession } = await serviceClient
+            const { data: existingSession } = await (serviceClient as any)
                 .from('sessions')
                 .select('id, session_id, last_active_at')
                 .eq('user_id', sessionResult.user.id)
@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
 
             if (existingSession) {
                 // Update existing session
-                const { error: updateError } = await serviceClient
+                const { error: updateError } = await (serviceClient as any)
                     .from('sessions')
                     .update({ 
                         session_id: sessionResult.session.access_token,

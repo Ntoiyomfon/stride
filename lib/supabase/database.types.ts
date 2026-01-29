@@ -174,6 +174,7 @@ export interface Database {
           browser: string | null
           os: string | null
           device_type: string | null
+          device_id: string
           location: Json
           created_at: string
           last_active_at: string
@@ -188,6 +189,7 @@ export interface Database {
           browser?: string | null
           os?: string | null
           device_type?: string | null
+          device_id?: string
           location?: Json
           created_at?: string
           last_active_at?: string
@@ -202,6 +204,7 @@ export interface Database {
           browser?: string | null
           os?: string | null
           device_type?: string | null
+          device_id?: string
           location?: Json
           created_at?: string
           last_active_at?: string

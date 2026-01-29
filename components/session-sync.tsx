@@ -36,7 +36,7 @@ export function SessionSync() {
     initializeApp();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: any, session: any) => {
       syncSession();
     });
 

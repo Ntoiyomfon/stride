@@ -10,7 +10,7 @@ export function AuthDebug() {
 
   useEffect(() => {
     // Get session directly from client
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
       setClientSession(session);
     });
   }, []);
