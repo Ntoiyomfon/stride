@@ -1,7 +1,7 @@
 export const supabaseConfig = {
-  url: process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  url: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+  serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   auth: {
     autoRefreshToken: true,
     persistSession: true,
@@ -82,14 +82,16 @@ export const getSupabaseConfig = () => {
 }
 
 // Validate required environment variables
-if (!supabaseConfig.url) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL is required')
-}
+if (typeof window !== 'undefined' || process.env.NODE_ENV === 'production') {
+  if (!supabaseConfig.url) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL is required')
+  }
 
-if (!supabaseConfig.anonKey) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is required')
-}
+  if (!supabaseConfig.anonKey) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_ANON_KEY is required')
+  }
 
-if (!supabaseConfig.serviceRoleKey && process.env.NODE_ENV !== 'test') {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY is required')
+  if (!supabaseConfig.serviceRoleKey && process.env.NODE_ENV !== 'test') {
+    console.warn('SUPABASE_SERVICE_ROLE_KEY is missing - some features may not work')
+  }
 }

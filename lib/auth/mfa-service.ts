@@ -35,16 +35,23 @@ export class MFAService {
   public client = supabase
 
   /**
-   * Enroll a new MFA factor (TOTP)
+   * Enroll a new MFA factor (TOTP) - Server-side version
    */
   async enrollMFA(factorType: 'totp' = 'totp', friendlyName?: string): Promise<MFAResult<MFAEnrollmentResult>> {
     try {
-      const { data, error } = await this.client.auth.mfa.enroll({
+      console.log('🔐 Starting MFA enrollment with factor type:', factorType)
+      
+      // For server-side MFA operations, we need to use the server client with proper session context
+      const { createSupabaseServerClient } = await import('../supabase/utils')
+      const serverClient = await createSupabaseServerClient()
+      
+      const { data, error } = await serverClient.auth.mfa.enroll({
         factorType,
         friendlyName: friendlyName || 'Authenticator App'
       })
 
       if (error) {
+        console.error('❌ MFA enrollment error:', error)
         return {
           success: false,
           error,
@@ -52,12 +59,14 @@ export class MFAService {
         }
       }
 
+      console.log('✅ MFA enrollment successful, factor ID:', data?.id)
       return {
         success: true,
         error: null,
         data: data as MFAEnrollmentResult
       }
     } catch (error) {
+      console.error('❌ MFA enrollment exception:', error)
       return {
         success: false,
         error: error as Error,
@@ -67,16 +76,23 @@ export class MFAService {
   }
 
   /**
-   * Verify MFA enrollment with TOTP code
+   * Verify MFA enrollment with TOTP code - Server-side version
    */
   async verifyEnrollment(factorId: string, code: string): Promise<MFAResult<any>> {
     try {
-      const { data, error } = await this.client.auth.mfa.challengeAndVerify({
+      console.log('🔐 Verifying MFA enrollment for factor:', factorId, 'with code length:', code.length)
+      
+      // Use server client for proper session context
+      const { createSupabaseServerClient } = await import('../supabase/utils')
+      const serverClient = await createSupabaseServerClient()
+      
+      const { data, error } = await serverClient.auth.mfa.challengeAndVerify({
         factorId,
         code
       })
 
       if (error) {
+        console.error('❌ MFA verification error:', error)
         return {
           success: false,
           error,
@@ -84,12 +100,14 @@ export class MFAService {
         }
       }
 
+      console.log('✅ MFA verification successful')
       return {
         success: true,
         error: null,
         data
       }
     } catch (error) {
+      console.error('❌ MFA verification exception:', error)
       return {
         success: false,
         error: error as Error,
@@ -163,11 +181,15 @@ export class MFAService {
   }
 
   /**
-   * Get all MFA factors for current user
+   * Get all MFA factors for current user - Server-side version
    */
   async listFactors(): Promise<MFAResult<any[]>> {
     try {
-      const { data, error } = await this.client.auth.mfa.listFactors()
+      // Use server client for proper session context
+      const { createSupabaseServerClient } = await import('../supabase/utils')
+      const serverClient = await createSupabaseServerClient()
+      
+      const { data, error } = await serverClient.auth.mfa.listFactors()
 
       if (error) {
         return {
@@ -244,8 +266,11 @@ export class MFAService {
         })
       )
 
-      // Store hashed codes in user profile
-      const { error } = await (this.client as any)
+      // Use server client to store hashed codes in user profile
+      const { createSupabaseServerClient } = await import('../supabase/utils')
+      const serverClient = await createSupabaseServerClient()
+      
+      const { error } = await (serverClient as any)
         .from('user_profiles')
         .update({
           two_factor_backup_codes: hashedCodes,
@@ -254,6 +279,7 @@ export class MFAService {
         .eq('id', userId)
 
       if (error) {
+        console.error('Failed to store backup codes:', error)
         return {
           success: false,
           error,
@@ -261,12 +287,14 @@ export class MFAService {
         }
       }
 
+      console.log('✅ Backup codes generated and stored for user:', userId)
       return {
         success: true,
         error: null,
         data: backupCodes // Return unhashed codes to user (one-time display)
       }
     } catch (error) {
+      console.error('Exception generating backup codes:', error)
       return {
         success: false,
         error: error as Error,
@@ -359,7 +387,11 @@ export class MFAService {
    */
   async updateUserMFAStatus(userId: string, enabled: boolean): Promise<MFAResult<void>> {
     try {
-      const { error } = await (this.client as any)
+      // Use server client for profile updates
+      const { createSupabaseServerClient } = await import('../supabase/utils')
+      const serverClient = await createSupabaseServerClient()
+      
+      const { error } = await (serverClient as any)
         .from('user_profiles')
         .update({
           two_factor_enabled: enabled,
@@ -368,6 +400,7 @@ export class MFAService {
         .eq('id', userId)
 
       if (error) {
+        console.error('Failed to update user MFA status:', error)
         return {
           success: false,
           error,
@@ -375,12 +408,14 @@ export class MFAService {
         }
       }
 
+      console.log('✅ User MFA status updated:', { userId, enabled })
       return {
         success: true,
         error: null,
         data: null
       }
     } catch (error) {
+      console.error('Exception updating user MFA status:', error)
       return {
         success: false,
         error: error as Error,

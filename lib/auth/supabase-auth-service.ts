@@ -311,7 +311,7 @@ export class AuthService {
 
   /**
    * Update password (requires current session)
-   */
+  */
   async updatePassword(newPassword: string): Promise<AuthResult<User | null>> {
     try {
       const { data, error } = await this.client.auth.updateUser({
@@ -344,12 +344,17 @@ export class AuthService {
    * Listen to auth state changes
    */
   onAuthStateChange(callback: (event: string, session: Session | null) => void) {
-    return this.client.auth.onAuthStateChange(async (event, session) => {
+    return this.client.auth.onAuthStateChange(async (event: string, session: Session | null) => {
+      console.log('🔄 Auth state change:', event, session ? 'with session' : 'no session')
+      
       // Handle session management based on auth events
       if (event === 'SIGNED_IN' && session) {
-        // Create session record when user signs in (only once per session)
+        // Only create session record once per device, not on every SIGNED_IN event
         try {
-          // Use API route to create session record (works from both client and server)
+          const { getDeviceId } = await import('../utils/device-id')
+          const deviceId = getDeviceId()
+          
+          // Use API route to create/update session record
           const response = await fetch('/api/sessions', {
             method: 'POST',
             headers: {
@@ -357,42 +362,33 @@ export class AuthService {
             },
             credentials: 'include',
             body: JSON.stringify({
-              action: 'create'
+              action: 'create',
+              deviceId: deviceId
             })
           })
           
           const data = await response.json()
           
           if (response.ok && data.success) {
-            console.log('✅ Session record created for user:', session.user.id)
+            console.log('✅ Session record created/updated for device:', deviceId)
           } else {
-            // Don't log error if session already exists
-            if (!data.error || !data.error.includes('already exists')) {
-              console.error('Failed to create session record:', data.error)
-            }
+            console.error('Failed to create/update session record:', data.error)
           }
         } catch (error) {
-          console.error('Failed to create session record on sign in:', error)
+          console.error('Failed to handle session on sign in:', error)
         }
       } else if (event === 'SIGNED_OUT') {
-        // Clean up session record when user signs out
+        // Clean up device ID on sign out
         try {
-          const { sessionManager } = await import('./session-manager')
-          // Note: We can't revoke the specific session here since we don't have the session ID
-          // The session will be cleaned up by the periodic cleanup process
-          console.log('🔄 User signed out, sessions will be cleaned up automatically')
+          const { clearDeviceId } = await import('../utils/device-id')
+          clearDeviceId()
+          console.log('🔄 User signed out, device ID cleared')
         } catch (error) {
-          console.error('Failed to cleanup session on sign out:', error)
+          console.error('Failed to cleanup on sign out:', error)
         }
       } else if (event === 'TOKEN_REFRESHED' && session) {
-        // Update session activity when token is refreshed
-        try {
-          // For now, skip session activity updates on token refresh to avoid client-side issues
-          // Session activity will be updated when user navigates or performs actions
-          console.log('🔄 Token refreshed for user:', session.user.id)
-        } catch (error) {
-          console.error('Failed to update session activity on token refresh:', error)
-        }
+        // Don't create new sessions on token refresh - just log it
+        console.log('🔄 Token refreshed for user:', session.user.id)
       }
       
       // Call the original callback
@@ -405,41 +401,23 @@ export class AuthService {
    */
   static async validateServerSession(): Promise<{ user: User | null; session: Session | null }> {
     try {
-      // First try the standard Supabase SSR approach
       const supabase = await createSupabaseServerClient()
-      const { data: { session }, error } = await supabase.auth.getSession()
       
-      if (!error && session) {
-        return { user: session.user, session }
+      // Use getUser() instead of getSession() for security
+      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      
+      if (userError || !user) {
+        return { user: null, session: null }
       }
 
-      // Fallback: Try to read from custom cookies
-      const { cookies } = await import('next/headers')
-      const cookieStore = await cookies()
+      // Get session after validating user
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
       
-      const accessToken = cookieStore.get('sb-access-token')?.value
-      const refreshToken = cookieStore.get('sb-refresh-token')?.value
-      const userCookie = cookieStore.get('sb-user')?.value
-
-      if (accessToken && userCookie) {
-        try {
-          const user = JSON.parse(userCookie)
-          const mockSession = {
-            access_token: accessToken,
-            refresh_token: refreshToken || '',
-            expires_at: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
-            expires_in: 3600,
-            token_type: 'bearer',
-            user: user
-          }
-          
-          return { user, session: mockSession as Session }
-        } catch (parseError) {
-          console.error('Error parsing user cookie:', parseError)
-        }
+      if (sessionError || !session) {
+        return { user: null, session: null }
       }
 
-      return { user: null, session: null }
+      return { user, session }
     } catch (error) {
       console.error('Error validating server session:', error)
       return { user: null, session: null }
@@ -488,7 +466,40 @@ export class AuthService {
 
       console.log('Creating user profile for:', user.id, 'with data:', profileData)
 
-      // Use service role client to bypass RLS policies for user profile creation
+      // Check if we're on the server side
+      const isServerSide = typeof window === 'undefined' && process.env.SUPABASE_SERVICE_ROLE_KEY
+
+      if (!isServerSide) {
+        // Client-side: delegate to API route
+        const response = await fetch('/api/profile', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify(profileData)
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+          console.error('Profile creation API error:', data)
+          return {
+            success: false,
+            error: new Error(data.error || 'Failed to create profile'),
+            data: null
+          }
+        }
+
+        console.log('User profile created via API:', data)
+        return {
+          success: true,
+          error: null,
+          data: data.profile
+        }
+      }
+
+      // Server-side: use service role client to bypass RLS policies
       const { createSupabaseServiceClient } = await import('../supabase/utils')
       const supabaseAdmin = await createSupabaseServiceClient()
 

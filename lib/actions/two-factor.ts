@@ -1,7 +1,7 @@
 "use server";
 
 import { mfaService, MFAService } from "@/lib/auth/mfa-service";
-import { authService } from "@/lib/auth/supabase-auth-service";
+import { AuthService } from "@/lib/auth/supabase-auth-service";
 import { revalidatePath } from "next/cache";
 
 /**
@@ -9,15 +9,38 @@ import { revalidatePath } from "next/cache";
  */
 export async function enrollMFA(friendlyName?: string) {
     try {
-        const sessionResult = await authService.getSession();
-        if (!sessionResult.success || !sessionResult.data) {
+        console.log('🔐 Server action: enrollMFA called')
+        
+        // Use validateServerSession instead of getSession for security
+        const sessionResult = await AuthService.validateServerSession();
+        if (!sessionResult.user || !sessionResult.session) {
+            console.error('❌ No valid session for MFA enrollment')
             return { success: false, error: "Not authenticated" };
         }
 
+        console.log('✅ Valid session found for user:', sessionResult.user.id)
+        
+        // First check if user already has MFA factors
+        const existingFactors = await mfaService.listFactors();
+        if (existingFactors.success && existingFactors.data && existingFactors.data.length > 0) {
+            console.log('⚠️ User already has MFA factors:', existingFactors.data.length)
+            return { 
+                success: false, 
+                error: "Two-factor authentication is already enabled for this account" 
+            };
+        }
+        
         const result = await mfaService.enrollMFA('totp', friendlyName || 'Authenticator App');
+        
+        if (!result.success) {
+            console.error('❌ MFA enrollment failed:', result.error)
+        } else {
+            console.log('✅ MFA enrollment successful')
+        }
+        
         return result;
     } catch (error) {
-        console.error('Failed to enroll MFA:', error);
+        console.error('❌ Failed to enroll MFA:', error);
         return { 
             success: false, 
             error: error instanceof Error ? error.message : "Failed to enroll MFA" 
@@ -30,22 +53,30 @@ export async function enrollMFA(friendlyName?: string) {
  */
 export async function verifyMFAEnrollment(factorId: string, code: string) {
     try {
-        const sessionResult = await authService.getSession();
-        if (!sessionResult.success || !sessionResult.data) {
+        console.log('🔐 Server action: verifyMFAEnrollment called for factor:', factorId)
+        
+        const sessionResult = await AuthService.validateServerSession();
+        if (!sessionResult.user || !sessionResult.session) {
+            console.error('❌ No valid session for MFA verification')
             return { success: false, error: "Not authenticated" };
         }
 
+        console.log('✅ Valid session found for user:', sessionResult.user.id)
+        
         const result = await mfaService.verifyEnrollment(factorId, code);
         
         if (result.success) {
+            console.log('✅ MFA verification successful, updating user profile')
             // Update user profile to mark 2FA as enabled
-            await mfaService.updateUserMFAStatus(sessionResult.data.user!.id, true);
+            await mfaService.updateUserMFAStatus(sessionResult.user.id, true);
             revalidatePath('/settings');
+        } else {
+            console.error('❌ MFA verification failed:', result.error)
         }
         
         return result;
     } catch (error) {
-        console.error('Failed to verify MFA enrollment:', error);
+        console.error('❌ Failed to verify MFA enrollment:', error);
         return { 
             success: false, 
             error: error instanceof Error ? error.message : "Failed to verify MFA enrollment" 
@@ -58,8 +89,8 @@ export async function verifyMFAEnrollment(factorId: string, code: string) {
  */
 export async function listMFAFactors() {
     try {
-        const sessionResult = await authService.getSession();
-        if (!sessionResult.success || !sessionResult.data) {
+        const sessionResult = await AuthService.validateServerSession();
+        if (!sessionResult.user || !sessionResult.session) {
             return { success: false, error: "Not authenticated" };
         }
 
@@ -79,8 +110,8 @@ export async function listMFAFactors() {
  */
 export async function unenrollMFAFactor(factorId: string) {
     try {
-        const sessionResult = await authService.getSession();
-        if (!sessionResult.success || !sessionResult.data) {
+        const sessionResult = await AuthService.validateServerSession();
+        if (!sessionResult.user || !sessionResult.session) {
             return { success: false, error: "Not authenticated" };
         }
 
@@ -91,7 +122,7 @@ export async function unenrollMFAFactor(factorId: string) {
             const factorsResult = await mfaService.listFactors();
             if (factorsResult.success && (!factorsResult.data || factorsResult.data.length === 0)) {
                 // No factors remain, disable 2FA in profile
-                await mfaService.updateUserMFAStatus(sessionResult.data.user!.id, false);
+                await mfaService.updateUserMFAStatus(sessionResult.user.id, false);
             }
             revalidatePath('/settings');
         }
@@ -111,12 +142,12 @@ export async function unenrollMFAFactor(factorId: string) {
  */
 export async function generateBackupCodes() {
     try {
-        const sessionResult = await authService.getSession();
-        if (!sessionResult.success || !sessionResult.data) {
+        const sessionResult = await AuthService.validateServerSession();
+        if (!sessionResult.user || !sessionResult.session) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const result = await mfaService.generateBackupCodes(sessionResult.data.user!.id);
+        const result = await mfaService.generateBackupCodes(sessionResult.user.id);
         return result;
     } catch (error) {
         console.error('Failed to generate backup codes:', error);
@@ -132,12 +163,12 @@ export async function generateBackupCodes() {
  */
 export async function verifyBackupCode(code: string) {
     try {
-        const sessionResult = await authService.getSession();
-        if (!sessionResult.success || !sessionResult.data) {
+        const sessionResult = await AuthService.validateServerSession();
+        if (!sessionResult.user || !sessionResult.session) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const result = await mfaService.verifyBackupCode(sessionResult.data.user!.id, code);
+        const result = await mfaService.verifyBackupCode(sessionResult.user.id, code);
         return result;
     } catch (error) {
         console.error('Failed to verify backup code:', error);
@@ -185,12 +216,12 @@ export async function verifyMFAChallenge(factorId: string, challengeId: string, 
  */
 export async function disable2FA() {
     try {
-        const sessionResult = await authService.getSession();
-        if (!sessionResult.success || !sessionResult.data) {
+        const sessionResult = await AuthService.validateServerSession();
+        if (!sessionResult.user || !sessionResult.session) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userId = sessionResult.data.user!.id;
+        const userId = sessionResult.user.id;
 
         // Get all factors
         const factorsResult = await mfaService.listFactors();
@@ -232,32 +263,44 @@ export async function disable2FA() {
  */
 export async function get2FAStatus() {
     try {
-        const sessionResult = await authService.getSession();
-        if (!sessionResult.success || !sessionResult.data) {
+        const sessionResult = await AuthService.validateServerSession();
+        if (!sessionResult.user || !sessionResult.session) {
             return { success: false, error: "Not authenticated" };
         }
 
-        const userId = sessionResult.data.user!.id;
+        const userId = sessionResult.user.id;
+
+        // Use server client to get user profile
+        const { createSupabaseServerClient } = await import('../supabase/utils')
+        const serverClient = await createSupabaseServerClient()
 
         // Get user profile
-        const { data: profile, error: profileError } = await (mfaService.client
+        const { data: profile, error: profileError } = await (serverClient
             .from('user_profiles')
             .select('two_factor_enabled, two_factor_backup_codes')
             .eq('id', userId)
             .single() as any);
 
         if (profileError) {
+            console.error('Failed to get user profile for 2FA status:', profileError)
             return { success: false, error: "Failed to get user profile" };
         }
 
         // Get MFA factors
         const factorsResult = await mfaService.listFactors();
         if (!factorsResult.success) {
+            console.error('Failed to list MFA factors:', factorsResult.error)
             return { success: false, error: "Failed to list MFA factors" };
         }
 
         const factors = factorsResult.data || [];
         const hasBackupCodes = ((profile as any)?.two_factor_backup_codes || []).length > 0;
+
+        console.log('2FA Status check:', {
+            profileEnabled: (profile as any)?.two_factor_enabled,
+            factorsCount: factors.length,
+            hasBackupCodes
+        })
 
         return {
             success: true,

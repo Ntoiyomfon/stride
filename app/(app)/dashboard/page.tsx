@@ -36,6 +36,46 @@ async function getBoard(userId: string) {
     if (error) {
       console.error('❌ Board query error:', error);
       
+      // If board doesn't exist, create it automatically
+      if (error.code === 'PGRST116') { // No rows found
+        console.log('🔧 Board not found, creating automatically...');
+        
+        try {
+          const { initializeUserBoard } = await import('@/lib/init-user-board');
+          const newBoard = await initializeUserBoard(userId);
+          
+          if (newBoard) {
+            console.log('✅ Board created successfully, fetching with columns...');
+            
+            // Fetch the newly created board with columns
+            const { createSupabaseServiceClient } = await import('@/lib/supabase/utils');
+            const serviceSupabase = await createSupabaseServiceClient();
+            
+            const { data: fullBoard, error: fetchError } = await serviceSupabase
+              .from('boards')
+              .select(`
+                *,
+                columns (
+                  *,
+                  job_applications (*)
+                )
+              `)
+              .eq('user_id', userId)
+              .eq('name', 'Job Hunt')
+              .single();
+              
+            if (fetchError) {
+              console.error('❌ Error fetching newly created board:', fetchError);
+              return null;
+            }
+            
+            return fullBoard;
+          }
+        } catch (initError) {
+          console.error('❌ Error initializing board:', initError);
+        }
+      }
+      
       // If RLS is blocking, try using service role as fallback
       console.log('🔧 Trying service role fallback...');
       const { createSupabaseServiceClient } = await import('@/lib/supabase/utils');

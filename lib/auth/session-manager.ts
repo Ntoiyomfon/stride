@@ -28,7 +28,8 @@ export class SessionManager {
     sessionId: string, 
     userId: string, 
     userAgent?: string, 
-    ipAddress?: string
+    ipAddress?: string,
+    deviceId?: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       // Check if we're on the server side
@@ -39,14 +40,29 @@ export class SessionManager {
         return { success: false, error: 'Session creation must be done server-side via API' }
       }
 
+      // Use service role client to bypass RLS policies
+      const { createSupabaseServiceClient } = await import('../supabase/utils')
+      const serviceClient = await createSupabaseServiceClient()
+
+      // Double-check for existing session with same session_id
+      const { data: existingSession } = await serviceClient
+        .from('sessions')
+        .select('id')
+        .eq('session_id', sessionId)
+        .eq('is_revoked', false)
+        .single()
+
+      if (existingSession) {
+        console.log('Session already exists, skipping creation')
+        return { success: true }
+      }
+
       const deviceInfo = parseUserAgent(userAgent || 'Unknown')
-      
-      // Clean up any existing sessions for this device/IP combination first
-      await this.cleanupDuplicateSessions(userId, userAgent, ipAddress)
       
       const sessionData: SessionInsert = {
         session_id: sessionId,
         user_id: userId,
+        device_id: deviceId || 'unknown',
         ip_address: ipAddress || '127.0.0.1',
         user_agent: userAgent || 'Unknown',
         browser: deviceInfo.browser,
@@ -58,17 +74,19 @@ export class SessionManager {
         is_revoked: false
       }
 
-      console.log('Creating session record for user:', userId, 'with session:', sessionId.substring(0, 20) + '...')
-
-      // Use service role client to bypass RLS policies
-      const { createSupabaseServiceClient } = await import('../supabase/utils')
-      const serviceClient = await createSupabaseServiceClient()
+      console.log('Creating session record for user:', userId, 'device:', deviceId, 'session:', sessionId.substring(0, 20) + '...')
 
       const { error } = await (serviceClient as any)
         .from('sessions')
         .insert(sessionData)
 
       if (error) {
+        // If it's a duplicate key error, that's fine - session already exists
+        if (error.code === '23505' || error.message?.includes('duplicate key')) {
+          console.log('Session already exists (duplicate key), this is fine')
+          return { success: true }
+        }
+        
         console.error('Failed to create session record:', error)
         return { success: false, error: error.message }
       }
