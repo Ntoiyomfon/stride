@@ -18,6 +18,7 @@ import { OAuthButtons } from "@/components/oauth-buttons";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { BackToHomeButton } from "@/components/back-to-home-button";
 
 export default function SignUp() {
   const [name, setName] = useState("");
@@ -67,19 +68,21 @@ export default function SignUp() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="absolute top-8 left-8">
+      <div className="absolute top-4 left-4">
+        <BackToHomeButton />
       </div>
       
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{
-          duration: 0.4,
-          ease: [0.23, 1, 0.32, 1],
-          delay: 0.1
-        }}
-      >
-        <Card className="w-full md:w-[538px] shadow-lg">
+      <div className="w-full max-w-md">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{
+            duration: 0.4,
+            ease: [0.23, 1, 0.32, 1],
+            delay: 0.1
+          }}
+        >
+          <Card className="w-full shadow-lg">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl font-bold text-foreground">
               Sign Up
@@ -214,6 +217,7 @@ export default function SignUp() {
           </CardFooter>
         </Card>
       </motion.div>
+      </div>
     </div>
   );
 }
