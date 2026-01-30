@@ -9,6 +9,63 @@ export async function proxy(request: NextRequest) {
     },
   })
 
+  // Add security headers
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  
+  // Add HSTS header for HTTPS
+  if (request.nextUrl.protocol === 'https:') {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+  }
+
+  // Force HTTPS in production
+  if (process.env.NODE_ENV === 'production' && request.nextUrl.protocol === 'http:') {
+    const httpsUrl = request.nextUrl.clone()
+    httpsUrl.protocol = 'https:'
+    return NextResponse.redirect(httpsUrl)
+  }
+  
+  // Block suspicious requests
+  const userAgent = request.headers.get('user-agent')?.toLowerCase() || ''
+  const suspiciousPatterns = [
+    'sqlmap', 'nikto', 'nmap', 'masscan', 'zap', 'burp',
+    'acunetix', 'nessus', 'openvas', 'w3af'
+  ]
+  
+  if (suspiciousPatterns.some(pattern => userAgent.includes(pattern))) {
+    console.warn('🚨 Blocked suspicious request:', {
+      ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+      userAgent,
+      url: request.url
+    })
+    return new NextResponse('Access Denied', { status: 403 })
+  }
+  
+  // Rate limiting for sensitive endpoints
+  const sensitiveEndpoints = ['/api/auth/', '/api/profile', '/api/sessions']
+  const isSensitiveEndpoint = sensitiveEndpoints.some(endpoint => 
+    request.nextUrl.pathname.startsWith(endpoint)
+  )
+  
+  if (isSensitiveEndpoint) {
+    // Add rate limiting headers (actual rate limiting is handled in individual routes)
+    response.headers.set('X-RateLimit-Policy', 'Enabled')
+  }
+  
+  // Prevent access to sensitive files
+  const blockedPaths = [
+    '/.env', '/.env.local', '/.env.production',
+    '/config/', '/logs/', '/.git/', '/node_modules/',
+    '/supabase/config.toml'
+  ]
+  
+  if (blockedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
+    return new NextResponse('Not Found', { status: 404 })
+  }
+
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -18,13 +75,30 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
+          cookiesToSet.forEach(({ name, value, options }) => {
+            // Enhance cookie security
+            const secureOptions = {
+              ...options,
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'lax' as const,
+              path: '/',
+            }
+            request.cookies.set(name, value)
+          })
           response = NextResponse.next({
             request,
           })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
-          )
+          cookiesToSet.forEach(({ name, value, options }) => {
+            const secureOptions = {
+              ...options,
+              httpOnly: true,
+              secure: process.env.NODE_ENV === 'production',
+              sameSite: 'lax' as const,
+              path: '/',
+            }
+            response.cookies.set(name, value, secureOptions)
+          })
         },
       },
     }
@@ -36,6 +110,9 @@ export async function proxy(request: NextRequest) {
     const { data } = await supabase.auth.getUser()
     user = data.user
   } catch (error) {
+    // Log security event but don't expose details
+    console.error('Session validation error:', error)
+    
     // Fallback: check custom cookies
     const accessToken = request.cookies.get('sb-access-token')?.value
     const userCookie = request.cookies.get('sb-user')?.value

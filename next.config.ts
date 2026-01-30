@@ -95,10 +95,8 @@ const nextConfig: NextConfig = {
   // Enable compression for better performance
   compress: true,
   
-  // Experimental security features
-  experimental: {
-    serverComponentsExternalPackages: ['@supabase/supabase-js'],
-  },
+  // Updated external packages configuration for Next.js 16
+  serverExternalPackages: ['@supabase/supabase-js'],
 };
 
 export default nextConfig;
